@@ -288,7 +288,7 @@ accept (or decline, which hides and silences them; blocked contacts are
 manageable in settings). A **Who can reach me** setting (Settings →
 Messenger) tightens this: *Contacts only* keeps the conversation list to
 people you've added. The gate is social, not cryptographic (SPEC.md §8) —
-real verified identity is the Obsidian Social plugin's job below.
+cryptographic identity verification is built in (Cross-vault mail, below).
 
 **Reserved addresses (SPEC.md §2):** a 400+ name list of handles that
 borrow weight no one on this bus can own — authority and system names
@@ -437,18 +437,19 @@ the relay can never read a message:
   pinned, then ordinary two-way mail.
 - **Connect by invite code** (`osinv1-…`), the **QR**, or the deep link —
   shown under Settings → Messenger → Cross-vault mail → *Your identity*, and
-  pasteable into Add contacts. The code format is shared with the older
-  Obsidian Social plugin, and pasted `social-invite` links decode too.
+  pasteable into Add contacts. Pasted `social-invite` links (from Obsidian
+  Social, a separate project) decode too.
 - **Honest limits:** remote conversations show no delivery/read receipts
   (SPEC.md §12 — receipts never cross vaults), the relay must be up for mail
   in flight (7-day retention is the outer bound), and a signature proves key
   possession, never personhood — compare the 30-digit safety number
   out-of-band.
 
-If the separate Obsidian Social plugin is also installed, disable one of the
-two bridges — both polling one relay would double-deliver. Mail that
+Verification is built in — no other plugin needed. If Obsidian Social (a
+separate project) happens to be installed in the same vault, disable one of
+the two bridges — both polling one relay would double-deliver. Mail that
 Social's bridge signed still verifies here (the shield badge falls back to
-`window.obsidianSocial`).
+`window.obsidianSocial` as a compatibility shim only).
 
 **A natural next shape:** because agents are first-class bus participants, a
 "private research group" is just several vaults whose humans *and* agents pin
@@ -476,8 +477,8 @@ anywhere.
       blocked, contact import (device picker + vCard), who-can-reach-me modes
 - [x] Reserved addresses (SPEC.md §2): anti-spoof name list enforced at
       registration, spoof warning on inbound mail carrying one
-- [ ] Group chats over a signed reflector (shipped in the Obsidian Social
-      plugin; a candidate port)
+- [ ] Group chats over a signed reflector (a separate project, Obsidian
+      Social, ships one; a candidate port)
 - [ ] Consumer adapters — e.g. expose `send` / `check inbox` as agent tools in an AI plugin
 - [ ] Multi-window/mobile polish
 
@@ -488,8 +489,10 @@ SPEC §17 history live in the git history (checkpoint commit) for whenever
 it returns.
 
 Nothing here authenticates anyone *within* a vault — the vault is a shared
-room, not a secure channel (SPEC.md §8). Authentication exists only *between*
-vaults, and only when the Obsidian Social plugin is installed.
+room, not a secure channel (SPEC.md §8). Authentication exists *between*
+vaults: Cross-vault mail signs and seals natively — key possession is
+proven by the signature, personhood only by comparing the 30-digit safety
+number out-of-band.
 
 ## License
 

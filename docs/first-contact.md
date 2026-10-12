@@ -6,9 +6,10 @@ and OM-2 (the Obsidian Social plugin) · 2026-10-12
 **Update, later on 2026-10-12:** the OM-2 core (bridge, relay client, invite,
 quarantine) was ported from Obsidian Social into this repo — cross-vault mail
 is now built into Message Bus (`src/om2/`), with the first-contact handshake,
-the requests UI, and §9's return-address fix all shipped here. Social remains
-an optional legacy interop path (invite codes are shared; its signed mail
-still verifies here).
+the requests UI, and §9's return-address fix all shipped here. Message Bus
+verifies natively; Obsidian Social is now a separate project — pasted
+`social-invite` codes still decode here, and mail signed by its bridge still
+verifies via the badge fallback.
 
 ## 0. The problem
 
