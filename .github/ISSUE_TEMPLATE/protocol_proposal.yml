@@ -1,0 +1,48 @@
+name: Protocol proposal
+description: Propose a change to the OM-1 protocol in SPEC.md
+labels: [protocol]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Protocol changes touch every writer and reader on the bus — plugins, agents,
+        and humans appending markdown by hand — so they get a heavier template.
+        Proposals usually start as an [Ideas](https://github.com/JordanNewell/message-bus/discussions/new?category=ideas)
+        discussion; link it below if one exists.
+  - type: input
+    id: sections
+    attributes:
+      label: SPEC.md section(s)
+      description: e.g. §3 (the append protocol), §7 (sync and conflict handling), §14 (receipts)
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: What the spec says today
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why
+      description: The use case this unlocks or the failure mode it fixes.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility
+      description: Would existing OM-1 writers/readers break? New envelope fields, changed semantics, migration path?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

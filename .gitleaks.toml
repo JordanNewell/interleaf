@@ -1,0 +1,14 @@
+# Gitleaks configuration — extends the built-in default rule set and
+# allowlists the known false positive below so the pre-commit hook stops
+# blocking legitimate commits (and keeps working across main.js rebuilds,
+# which shift line numbers and would stale a .gitleaksignore fingerprint).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Crockford base32 alphabet constant (src/crypto.ts, bundled into main.js) — the public character set vault keys are rendered in, not a secret"
+regexTarget = "match"
+regexes = [
+  '0123456789ABCDEFGHJKMNPQRSTVWXYZ',
+]

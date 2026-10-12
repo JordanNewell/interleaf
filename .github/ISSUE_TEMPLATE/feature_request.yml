@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a capability or behavior change
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or workflow that today's Message Bus doesn't cover.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should happen?
+      description: The behavior you'd like, described concretely.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways you've tried or considered to get there, and why they fall short.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Protocol changes affect everyone on the bus (SPEC.md), not just this plugin's UI.
+      options:
+        - Plugin behavior / UI
+        - Protocol change (SPEC.md)
+        - Both
+        - Not sure

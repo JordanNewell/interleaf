@@ -1,0 +1,29 @@
+// Entry point for the portable unit suite — run.mjs bundles this and
+// imports it, at which point node:test executes every registered test.
+import "./envelope.test";
+import "./receipts.test";
+import "./cursor.test";
+import "./crypto.test";
+import "./settings.test";
+import "./passcode.test";
+import "./wallpaper.test";
+import "./chat-ui.test";
+import "./store.test";
+import "./bus.test";
+import "./api.test";
+import "./retention.test";
+import "./retransmit.test";
+import "./reserved.test";
+import "./contacts.test";
+import "./om2-gate.test";
+import "./om2-crypto.test";
+import "./om2-alias.test";
+import "./om2-invite.test";
+import "./om2-qr.test";
+import "./om2-relay.test";
+import "./om2-contacts.test";
+import "./om2-bridge.test";
+import "./om2-identity.test";
+import "./contact-import.test";
+import "./attachments.test";
+import "./recipient.test";

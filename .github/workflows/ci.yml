@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # typecheck + bundle (tsc -noEmit && esbuild → main.js)
+      - run: npm run build
+      # portable unit suite + the source-level self-checks
+      - run: npm test

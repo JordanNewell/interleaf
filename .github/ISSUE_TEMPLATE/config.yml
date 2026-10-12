@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/JordanNewell/message-bus/discussions/new?category=q-a
+    about: Something not working the way you expect, or unsure how to wire an address, inbox, or agent up? Ask in Q&A.
+  - name: Idea (early)
+    url: https://github.com/JordanNewell/message-bus/discussions/new?category=ideas
+    about: Half-formed feature ideas are welcome in Ideas — open a feature request issue once the shape is clear.
+  - name: Show and tell
+    url: https://github.com/JordanNewell/message-bus/discussions/new?category=show-and-tell
+    about: Built a plugin, script, or agent that talks over the bus? Show it off.

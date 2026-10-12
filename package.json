@@ -1,0 +1,26 @@
+{
+  "name": "message-bus",
+  "version": "1.0.0",
+  "description": "A vault-local markdown message bus for Obsidian plugins, agents, scripts, and humans.",
+  "main": "main.js",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "node tests/unit/run.mjs && node tests/emoji-check.mjs && node tests/wallpaper-check.mjs && node tests/avatar-check.mjs",
+    "test:unit": "node tests/unit/run.mjs",
+    "relay": "node esbuild.relay.mjs && node tools/relay.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.25.0",
+    "obsidian": "latest",
+    "playwright-core": "^1.64.0",
+    "typescript": "5.7.2"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.5.0",
+    "tweetnacl": "^1.0.3"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+*.map
+.DS_Store
+test-vault/
+test-artifacts/
+.zcode/
+tools/
+relay-db*.json

@@ -1,0 +1,71 @@
+name: Bug report
+description: Report something broken in Message Bus
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps someone else can follow. Include example message blocks if relevant.
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version
+      description: Settings → About → Current version (minimum supported is 1.13.0).
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - iOS
+        - Android
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Where does the mail live?
+      description: The *Hide mail storage* setting — the hidden dot-folder (default) or the visible `Messenger/` folder.
+      options:
+        - Hidden dot-folder (default)
+        - Visible Messenger/ folder
+        - Not sure
+  - type: dropdown
+    id: sync
+    attributes:
+      label: Sync engine (if any)
+      description: Folder-sync engines interact with the mailbox (conflict copies, merges) — pick what syncs your vault.
+      options:
+        - None
+        - Obsidian Sync
+        - iCloud
+        - Syncthing
+        - Dropbox
+        - Google Drive
+        - Other / unsure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: Anything from the developer console (Ctrl+Shift+I / Cmd+Opt+I → Console)?
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
