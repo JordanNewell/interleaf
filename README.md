@@ -435,6 +435,15 @@ the relay can never read a message:
   ones), and mail from them waits on the relay until you accept or decline.
   Accepting completes the handshake both ways — one exchange, both sides
   pinned, then ordinary two-way mail.
+- **Reaching someone starts out-of-band.** There is no directory to type an
+  address into: until invite codes have moved between you (QR shown, link
+  messaged, code pasted), two strangers on different vaults have no path to
+  each other — that's the design, not a gap. If you both send requests at
+  the same moment, each side sees a request under Contact requests and
+  **both** must accept; the connect-automatically shortcut only fires for
+  the side who waited. A request we sent also goes stale after two weeks —
+  after that, their eventual reply knocks like anyone else's instead of
+  waving itself in.
 - **Connect by invite code** (`osinv1-…`), the **QR**, or the deep link —
   shown under Settings → Messenger → Cross-vault mail → *Your identity*, and
   pasteable into Add contacts. Pasted `social-invite` links (from Obsidian

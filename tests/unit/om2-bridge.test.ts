@@ -513,4 +513,101 @@ describe("om2 verification ladder", () => {
     await stopVault(bob);
     await relay.close();
   });
+
+  test("a contact request is retried, then throws with the attempt count", async () => {
+    const relay = await mkRelay();
+    const alice = await mkVault("alice", relay.url);
+    let posts = 0;
+    const flaky = new Bridge({
+      mail: contactsMailStore(alice.store),
+      kv: memoryKv(),
+      identity: generateIdentity(),
+      contacts: contactsBook(alice.contacts, alice.store) as Om2Contacts,
+      relayUrl: relay.url,
+      ...POLL,
+      requestAttempts: 3,
+      requestRetryDelayMs: 1,
+      fetchImpl: (async () => {
+        posts++;
+        throw new TypeError("fetch failed");
+      }) as typeof fetch,
+      onEvent: () => {},
+    });
+    await flaky.start();
+    await assert.rejects(
+      () => flaky.sendRequest(generateIdentity().publicKey, relay.url, "knock"),
+      /failed after 3 attempts/
+    );
+    assert.equal(posts, 3, "retried before giving up");
+    await flaky.stop();
+    await stopVault(alice);
+    await relay.close();
+  });
+
+  test("an expired outgoing request no longer auto-pins — the reply knocks like anyone else", async () => {
+    const relay = await mkRelay();
+    const bob = generateIdentity();
+    const adapter = new FakeAdapter();
+    const store = new MailboxStore(adapter, "root");
+    const contacts = new ContactsStore(adapter, "root");
+    const identity = generateIdentity();
+    const events: string[] = [];
+    const kv = memoryKv();
+    // pre-seed a state file whose outgoing request is three weeks old
+    await kv.write(
+      "bridge-state.json",
+      JSON.stringify({
+        version: 2,
+        sent: {},
+        seen: {},
+        attempts: {},
+        outgoing: { [fingerprint(bob.publicKey)]: { ts: Date.now() - 21 * 86_400_000 } },
+      })
+    );
+    const alice = new Bridge({
+      mail: contactsMailStore(store),
+      kv,
+      identity,
+      contacts: contactsBook(contacts, store) as Om2Contacts,
+      relayUrl: relay.url,
+      ...POLL,
+      onEvent: (ev) => events.push(ev.type),
+    });
+    await alice.start();
+    await postBox(relay.url, bob, identity.publicKey, buildWire(bob, fingerprint(identity.publicKey), "finally replying"));
+    await waitFor(() => events.includes("quarantined"), "quarantine, not auto-pin");
+    assert.equal(events.includes("autopinned"), false, "stale request must not authorize auto-pin");
+    await alice.stop();
+    await relay.close();
+  });
+
+  test("a contact with no relay on file gets the no-relay bounce text, not a mystery", async () => {
+    const deadRelay = "http://127.0.0.1:9"; // nothing listens here
+    const bob = await mkVault("bob", deadRelay);
+    const aliceId = generateIdentity();
+    await bob.contacts.upsert({
+      address: "alice",
+      name: "alice",
+      state: "mutual",
+      updated: new Date().toISOString(),
+      fp: fingerprint(aliceId.publicKey),
+      publicKey: toB64u(aliceId.publicKey),
+      relays: [],
+    });
+    await bob.store.append("alice", {
+      id: "msg_norelay",
+      from: "owner",
+      to: "alice",
+      ts: new Date().toISOString(),
+      replyTo: null,
+      body: "into the void",
+    });
+    await waitFor(async () => {
+      const inbox = await bob.store.readInbox("owner");
+      return inbox.some(
+        (m) => m.from === "bridge" && m.body.includes("no relay on file for this contact")
+      );
+    }, "no-relay bounce notice");
+    await stopVault(bob);
+  });
 });

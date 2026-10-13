@@ -91,6 +91,10 @@ export interface BridgeOptions {
   outboundPollMs?: number;
   /** append a bounce after this many failed send attempts (default 3) */
   maxSendAttempts?: number;
+  /** contact-request send attempts before giving up (default 3) */
+  requestAttempts?: number;
+  /** delay between contact-request retries, ms (default 500) */
+  requestRetryDelayMs?: number;
   log?: (msg: string) => void;
   /**
    * UI hook (replaces log-string coupling): fires once per state transition
@@ -163,6 +167,13 @@ interface DeliverOutcome {
 const BOUNCE_FROM = "bridge";
 const DEFAULT_REQUEST_NOTE = "Hi — I'd like to add you as a contact on Obsidian Messenger.";
 const ACCEPT_REPLY_NOTE = "Contact request accepted — this conversation is now mutual.";
+/**
+ * A sent request authorizes auto-pin only while it is fresh (§2): the
+ * person may have moved on, a device may have changed hands — a forgotten
+ * invitation must not wave a stranger straight in years later. After this,
+ * their reply is treated as an ordinary verified knock.
+ */
+const OUTGOING_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 export class Bridge {
   readonly localAddress: string;
@@ -171,6 +182,8 @@ export class Bridge {
   private inboundPollMs: number;
   private outboundPollMs: number;
   private maxSendAttempts: number;
+  private requestAttempts: number;
+  private requestRetryDelayMs: number;
   private state: BridgeState | null = null;
   private log: (msg: string) => void;
   private onEvent: (ev: BridgeEvent) => void;
@@ -187,6 +200,8 @@ export class Bridge {
     this.inboundPollMs = opts.inboundPollMs ?? 60_000;
     this.outboundPollMs = opts.outboundPollMs ?? 5_000;
     this.maxSendAttempts = opts.maxSendAttempts ?? 3;
+    this.requestAttempts = Math.max(1, opts.requestAttempts ?? 3);
+    this.requestRetryDelayMs = Math.max(0, opts.requestRetryDelayMs ?? 500);
     this.log = opts.log ?? (() => {});
     this.onEvent = opts.onEvent ?? (() => {});
     this.fetchImpl = opts.fetchImpl ?? fetch;
@@ -232,8 +247,10 @@ export class Bridge {
    * Send a sealed, self-signed introduction to a bare public key — the
    * REQUESTED state (§2). Needs no pinned contact and creates no alias
    * folder: pinning happens only when THEY reply and the reply passes the
-   * ladder (the only auto-pin in the system). v1 does no retry/bounce for
-   * requests — a failed send throws.
+   * ladder (the only auto-pin in the system). The post is retried a few
+   * times inline (a briefly-down relay must not eat the knock); on total
+   * failure it throws — there is no local bounce, because the request
+   * exists nowhere but here.
    *
    * Returns the derived fingerprint (the key you'll wait for) and the intro
    * message id. The intro carries our own relay as the return address (§9).
@@ -273,8 +290,26 @@ export class Bridge {
         })
       )
     );
-    const ok = await this.postOutbox(relay, fp, sealJson(publicKey, wire).box);
-    if (!ok) throw new Error(`relay ${relay} rejected the contact request`);
+    const box = sealJson(publicKey, wire).box;
+    let ok = false;
+    let lastErr = "unknown error";
+    for (let n = 1; n <= this.requestAttempts; n++) {
+      try {
+        if (await this.postOutbox(relay, fp, box)) {
+          ok = true;
+          break;
+        }
+        lastErr = `relay ${relay} rejected the contact request`;
+      } catch (err) {
+        lastErr = String(err instanceof Error ? err.message : err);
+      }
+      if (n < this.requestAttempts && this.requestRetryDelayMs > 0) {
+        await new Promise((r) => setTimeout(r, this.requestRetryDelayMs));
+      }
+    }
+    if (!ok) {
+      throw new Error(`contact request failed after ${this.requestAttempts} attempts: ${lastErr}`);
+    }
     this.state.markOutgoing(fp);
     this.log(`contact request sent to ${fp} via ${relay}`);
     return { fp, id: wire.id };
@@ -434,8 +469,12 @@ export class Bridge {
     const payload = sealJson(fromB64u(contact.publicKey), wire);
     let lastErr = "unknown error";
     let delivered = false;
+    // A contact with no relay on file (an older client, or an invite that
+    // omitted it) falls back to OUR relay — which they never poll, so a
+    // failure there deserves its own bounce text, not a mystery.
+    const noRelayOnFile = contact.relays.length === 0;
 
-    for (const relay of contact.relays.length > 0 ? contact.relays : [this.opts.relayUrl]) {
+    for (const relay of noRelayOnFile ? [this.opts.relayUrl] : contact.relays) {
       try {
         const ok = await this.postOutbox(relay, contact.fp, payload.box);
         if (ok) {
@@ -458,10 +497,13 @@ export class Bridge {
     const attempts = this.state.attemptFailed(block.id, lastErr);
     this.log(`send failed for ${block.id} (attempt ${attempts}): ${lastErr}`);
     if (attempts >= this.maxSendAttempts) {
-      await this.bounce(block, contact, lastErr);
+      const reason = noRelayOnFile
+        ? "no relay on file for this contact (an older client may have omitted it) — your own relay was tried as a fallback, but they never poll it. Ask them to re-share their invite code."
+        : lastErr;
+      await this.bounce(block, contact, reason);
       this.state.markSent(block.id); // stop retrying; the bounce is the record
       this.state.clearAttempt(block.id);
-      this.onEvent({ type: "bounce", id: block.id, alias: contact.alias, reason: lastErr });
+      this.onEvent({ type: "bounce", id: block.id, alias: contact.alias, reason });
     }
   }
 
@@ -679,6 +721,10 @@ export class Bridge {
       verifyDetached(pkBytes, sig, canonical);
 
     if (pkStr && pkBytes && verified) {
+      const pending = this.state.outgoingOf(wire.from.fp);
+      if (pending && Date.now() - pending.ts > OUTGOING_TTL_MS) {
+        this.state.clearOutgoing(wire.from.fp); // expired: they knock like anyone else
+      }
       if (this.state.outgoingHas(wire.from.fp)) {
         // The reply is sealed to us and self-signed — only the holder of the
         // key we requested could have produced it (§2 REQUESTED → PINNED).

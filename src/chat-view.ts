@@ -107,6 +107,8 @@ interface ConversationRow {
   locked: boolean;
   /** Social-gate state (SPEC §17); null = no contacts.md row. */
   contact: ContactState | null;
+  /** When that contact row was last touched — ages a pending invitation. */
+  contactUpdated: string | null;
 }
 
 /**
@@ -447,6 +449,7 @@ export class MessengerChatView extends ItemView {
           unread: address === me ? 0 : (unreadBySender.get(address) ?? 0),
           locked: this.plugin.isPeerLocked(address),
           contact: contacts.get(address)?.state ?? null,
+          contactUpdated: contacts.get(address)?.updated ?? null,
         };
       })
     );
@@ -837,7 +840,13 @@ export class MessengerChatView extends ItemView {
       if (row.contact === "pending") {
         const pending = top.createDiv({ cls: "messenger-conv-pending" });
         setIcon(pending, "clock");
-        pending.setAttribute("aria-label", "Invitation sent — mutual once they reply");
+        const age = invitationAgeDays(row.contactUpdated);
+        pending.setAttribute(
+          "aria-label",
+          age !== null && age >= 1
+            ? `Invitation sent ${age}d ago — mutual once they reply`
+            : "Invitation sent — mutual once they reply"
+        );
       }
       top.createDiv({ cls: "messenger-conv-time" }, (el) =>
         el.setText(row.lastTs ? fmtListTime(row.lastTs) : "")
@@ -1211,6 +1220,7 @@ export class MessengerChatView extends ItemView {
     ]);
     const name = registry.find((r) => r.address === peer)?.name ?? peer;
     const contactState = peer === me ? null : (contacts.get(peer)?.state ?? null);
+    const contactUpdated = peer === me ? null : (contacts.get(peer)?.updated ?? null);
     this.peerName = peer === me ? `${name} (you)` : name;
 
     // a locked conversation stops here: no thread, no composer, no receipts
@@ -1254,15 +1264,18 @@ export class MessengerChatView extends ItemView {
         badge.createDiv({ cls: "messenger-contact-badge-icon" }),
         contactState === "mutual" ? "user-check" : contactState === "pending" ? "clock" : "user-plus"
       );
-      badge.createDiv({ cls: "messenger-contact-badge-text" }, (el) =>
+      badge.createDiv({ cls: "messenger-contact-badge-text" }, (el) => {
+        const age = contactState === "pending" ? invitationAgeDays(contactUpdated) : null;
         el.setText(
           contactState === "mutual"
             ? "Mutual contact"
             : contactState === "pending"
-              ? "Invitation sent — mutual when they reply"
+              ? age !== null && age >= 1
+                ? `Invitation sent ${age}d ago — mutual when they reply`
+                : "Invitation sent — mutual when they reply"
               : "Contact request"
-        )
-      );
+        );
+      });
     }
 
     const attBtn = head.createDiv({
@@ -2345,6 +2358,14 @@ function fmtTime(ts: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** Whole days since a contact row was last touched; null when unknown/unparseable. */
+function invitationAgeDays(updated: string | null): number | null {
+  if (!updated) return null;
+  const t = Date.parse(updated);
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86_400_000);
 }
 
 /**

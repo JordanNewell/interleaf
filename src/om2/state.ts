@@ -155,6 +155,10 @@ export class BridgeState {
     return this.outgoing.has(fp);
   }
 
+  outgoingOf(fp: string): OutgoingRecord | undefined {
+    return this.outgoing.get(fp);
+  }
+
   markOutgoing(fp: string): void {
     if (!this.outgoing.has(fp)) this.outgoing.set(fp, { ts: Date.now() });
     this.scheduleSave();

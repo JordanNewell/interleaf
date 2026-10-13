@@ -10278,7 +10278,8 @@ var MessengerChatView = class extends import_obsidian12.ItemView {
           lastTs: last?.ts ?? null,
           unread: address === me ? 0 : unreadBySender.get(address) ?? 0,
           locked: this.plugin.isPeerLocked(address),
-          contact: contacts.get(address)?.state ?? null
+          contact: contacts.get(address)?.state ?? null,
+          contactUpdated: contacts.get(address)?.updated ?? null
         };
       })
     );
@@ -10601,7 +10602,11 @@ var MessengerChatView = class extends import_obsidian12.ItemView {
       if (row.contact === "pending") {
         const pending = top.createDiv({ cls: "messenger-conv-pending" });
         (0, import_obsidian12.setIcon)(pending, "clock");
-        pending.setAttribute("aria-label", "Invitation sent \u2014 mutual once they reply");
+        const age = invitationAgeDays(row.contactUpdated);
+        pending.setAttribute(
+          "aria-label",
+          age !== null && age >= 1 ? `Invitation sent ${age}d ago \u2014 mutual once they reply` : "Invitation sent \u2014 mutual once they reply"
+        );
       }
       top.createDiv(
         { cls: "messenger-conv-time" },
@@ -10916,6 +10921,7 @@ var MessengerChatView = class extends import_obsidian12.ItemView {
     ]);
     const name = registry.find((r) => r.address === peer)?.name ?? peer;
     const contactState = peer === me ? null : contacts.get(peer)?.state ?? null;
+    const contactUpdated = peer === me ? null : contacts.get(peer)?.updated ?? null;
     this.peerName = peer === me ? `${name} (you)` : name;
     if (this.plugin.isPeerLocked(peer)) {
       this.renderPeerLock(peer, name);
@@ -10955,12 +10961,12 @@ var MessengerChatView = class extends import_obsidian12.ItemView {
         badge.createDiv({ cls: "messenger-contact-badge-icon" }),
         contactState === "mutual" ? "user-check" : contactState === "pending" ? "clock" : "user-plus"
       );
-      badge.createDiv(
-        { cls: "messenger-contact-badge-text" },
-        (el) => el.setText(
-          contactState === "mutual" ? "Mutual contact" : contactState === "pending" ? "Invitation sent \u2014 mutual when they reply" : "Contact request"
-        )
-      );
+      badge.createDiv({ cls: "messenger-contact-badge-text" }, (el) => {
+        const age = contactState === "pending" ? invitationAgeDays(contactUpdated) : null;
+        el.setText(
+          contactState === "mutual" ? "Mutual contact" : contactState === "pending" ? age !== null && age >= 1 ? `Invitation sent ${age}d ago \u2014 mutual when they reply` : "Invitation sent \u2014 mutual when they reply" : "Contact request"
+        );
+      });
     }
     const attBtn = head.createDiv({
       cls: "messenger-att-button clickable-icon"
@@ -11791,6 +11797,12 @@ function fmtTime(ts) {
     minute: "2-digit"
   });
 }
+function invitationAgeDays(updated) {
+  if (!updated) return null;
+  const t = Date.parse(updated);
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 864e5);
+}
 function fmtListTime(ts) {
   const d = new Date(ts);
   const days = Math.round((startOfDay(/* @__PURE__ */ new Date()) - startOfDay(d)) / 864e5);
@@ -12113,6 +12125,9 @@ var BridgeState = class _BridgeState {
   outgoingHas(fp) {
     return this.outgoing.has(fp);
   }
+  outgoingOf(fp) {
+    return this.outgoing.get(fp);
+  }
   markOutgoing(fp) {
     if (!this.outgoing.has(fp)) this.outgoing.set(fp, { ts: Date.now() });
     this.scheduleSave();
@@ -12200,6 +12215,7 @@ var BridgeState = class _BridgeState {
 var BOUNCE_FROM = "bridge";
 var DEFAULT_REQUEST_NOTE = "Hi \u2014 I'd like to add you as a contact on Obsidian Messenger.";
 var ACCEPT_REPLY_NOTE = "Contact request accepted \u2014 this conversation is now mutual.";
+var OUTGOING_TTL_MS = 14 * 24 * 60 * 60 * 1e3;
 var Bridge = class {
   constructor(opts) {
     this.opts = opts;
@@ -12214,6 +12230,8 @@ var Bridge = class {
     this.inboundPollMs = opts.inboundPollMs ?? 6e4;
     this.outboundPollMs = opts.outboundPollMs ?? 5e3;
     this.maxSendAttempts = opts.maxSendAttempts ?? 3;
+    this.requestAttempts = Math.max(1, opts.requestAttempts ?? 3);
+    this.requestRetryDelayMs = Math.max(0, opts.requestRetryDelayMs ?? 500);
     this.log = opts.log ?? (() => {
     });
     this.onEvent = opts.onEvent ?? (() => {
@@ -12253,8 +12271,10 @@ var Bridge = class {
    * Send a sealed, self-signed introduction to a bare public key — the
    * REQUESTED state (§2). Needs no pinned contact and creates no alias
    * folder: pinning happens only when THEY reply and the reply passes the
-   * ladder (the only auto-pin in the system). v1 does no retry/bounce for
-   * requests — a failed send throws.
+   * ladder (the only auto-pin in the system). The post is retried a few
+   * times inline (a briefly-down relay must not eat the knock); on total
+   * failure it throws — there is no local bounce, because the request
+   * exists nowhere but here.
    *
    * Returns the derived fingerprint (the key you'll wait for) and the intro
    * message id. The intro carries our own relay as the return address (§9).
@@ -12290,8 +12310,26 @@ var Bridge = class {
         })
       )
     );
-    const ok = await this.postOutbox(relay, fp, sealJson(publicKey, wire).box);
-    if (!ok) throw new Error(`relay ${relay} rejected the contact request`);
+    const box = sealJson(publicKey, wire).box;
+    let ok = false;
+    let lastErr = "unknown error";
+    for (let n = 1; n <= this.requestAttempts; n++) {
+      try {
+        if (await this.postOutbox(relay, fp, box)) {
+          ok = true;
+          break;
+        }
+        lastErr = `relay ${relay} rejected the contact request`;
+      } catch (err) {
+        lastErr = String(err instanceof Error ? err.message : err);
+      }
+      if (n < this.requestAttempts && this.requestRetryDelayMs > 0) {
+        await new Promise((r) => setTimeout(r, this.requestRetryDelayMs));
+      }
+    }
+    if (!ok) {
+      throw new Error(`contact request failed after ${this.requestAttempts} attempts: ${lastErr}`);
+    }
     this.state.markOutgoing(fp);
     this.log(`contact request sent to ${fp} via ${relay}`);
     return { fp, id: wire.id };
@@ -12433,7 +12471,8 @@ var Bridge = class {
     const payload = sealJson(fromB64u(contact.publicKey), wire);
     let lastErr = "unknown error";
     let delivered = false;
-    for (const relay of contact.relays.length > 0 ? contact.relays : [this.opts.relayUrl]) {
+    const noRelayOnFile = contact.relays.length === 0;
+    for (const relay of noRelayOnFile ? [this.opts.relayUrl] : contact.relays) {
       try {
         const ok = await this.postOutbox(relay, contact.fp, payload.box);
         if (ok) {
@@ -12454,10 +12493,11 @@ var Bridge = class {
     const attempts = this.state.attemptFailed(block.id, lastErr);
     this.log(`send failed for ${block.id} (attempt ${attempts}): ${lastErr}`);
     if (attempts >= this.maxSendAttempts) {
-      await this.bounce(block, contact, lastErr);
+      const reason = noRelayOnFile ? "no relay on file for this contact (an older client may have omitted it) \u2014 your own relay was tried as a fallback, but they never poll it. Ask them to re-share their invite code." : lastErr;
+      await this.bounce(block, contact, reason);
       this.state.markSent(block.id);
       this.state.clearAttempt(block.id);
-      this.onEvent({ type: "bounce", id: block.id, alias: contact.alias, reason: lastErr });
+      this.onEvent({ type: "bounce", id: block.id, alias: contact.alias, reason });
     }
   }
   async postOutbox(relayUrl, toFp, box) {
@@ -12620,6 +12660,10 @@ The message block is still in \`${contact.alias}/inbox.md\`.`
     const pkBytes = pkStr ? safePkBytes(pkStr) : null;
     const verified = pkStr !== null && pkBytes !== null && fingerprint(pkBytes) === wire.from.fp && sig !== null && verifyDetached(pkBytes, sig, canonical);
     if (pkStr && pkBytes && verified) {
+      const pending = this.state.outgoingOf(wire.from.fp);
+      if (pending && Date.now() - pending.ts > OUTGOING_TTL_MS) {
+        this.state.clearOutgoing(wire.from.fp);
+      }
       if (this.state.outgoingHas(wire.from.fp)) {
         const pinned = await this.opts.contacts.pin({
           publicKey: pkBytes,

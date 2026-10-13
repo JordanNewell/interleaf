@@ -125,7 +125,14 @@ mail from a new key.
 - **Replies that pin**: inbound from unpinned fp where
   `outgoing[fp]` exists and the self-signature verifies → auto-pin, then
   normal delivery. This is the only auto-pin in the system, and it is
-  symmetric to the accepter's explicit Accept.
+  symmetric to the accepter's explicit Accept — **except when the other
+  side's knock already quarantined us** (simultaneous mutual requests):
+  the hold rule runs first, so both sides must accept. Auto-pin also has a
+  14-day TTL — a forgotten request never waves a stranger in years later.
+- **Request send retry**: `sendRequest` retries its relay POST inline
+  (default 3 attempts, 500 ms apart) before throwing — a briefly-down
+  relay must not eat the knock. No local bounce: the request exists
+  nowhere but here.
 
 ## 5. Surface (as built)
 
