@@ -111,7 +111,7 @@ export function isValidPasscode(passcode: string): boolean {
 
 /**
  * Floor for passcodes that protect the encryption key: a stolen data.json can
- * be attacked offline at PBKDF2 speed, so digits-only codes are capped out and
+ * be attacked offline at Argon2id speed, so digits-only codes are capped out and
  * a longer minimum applies. UI-gate-only passcodes (no encryption) keep the
  * friendlier PASSCODE_MIN — nothing secret is at stake there.
  */

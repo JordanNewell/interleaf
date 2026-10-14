@@ -1,7 +1,15 @@
 import nacl from "tweetnacl";
 import { identityFromSeed, identityValid, type Identity } from "./crypto/keys";
 import { toB64u } from "./crypto/b64";
-import { PBKDF2_ITERATIONS, rewrapRawVaultKey, unwrapRawVaultKey, zeroKeyMaterial } from "../crypto";
+import {
+  DEFAULT_KDF,
+  LEGACY_KDF,
+  PBKDF2_ITERATIONS,
+  rewrapRawVaultKey,
+  unwrapRawVaultKey,
+  zeroKeyMaterial,
+  type KdfId,
+} from "../crypto";
 import type { Om2KeyValueStore } from "./types";
 
 /**
@@ -24,19 +32,22 @@ export interface IdentityRecord {
   wrappedKey: string;
   /** base64url public key — readable without unlock (invites, display) */
   publicKey: string;
+  /** KDF the seed wrap used (absent in older records = pbkdf2 era). */
+  kdf?: KdfId;
 }
 
 /** A fresh identity: new keypair, seed wrapped under this passcode. */
 export async function createIdentityRecord(
   passcode: string,
-  iterations = PBKDF2_ITERATIONS
+  iterations = PBKDF2_ITERATIONS,
+  kdf: KdfId = DEFAULT_KDF
 ): Promise<{ record: IdentityRecord; identity: Identity }> {
   const seed = nacl.randomBytes(32);
   const identity = identityFromSeed(seed);
   zeroKeyMaterial(seed); // nacl copied the seed; the buffer has no further business
-  const bundle = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), passcode, iterations);
+  const bundle = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), passcode, iterations, kdf);
   return {
-    record: { version: 1, keySalt: bundle.keySalt, wrappedKey: bundle.wrappedKey, publicKey: toB64u(identity.publicKey) },
+    record: { version: 1, keySalt: bundle.keySalt, wrappedKey: bundle.wrappedKey, publicKey: toB64u(identity.publicKey), kdf },
     identity,
   };
 }
@@ -49,9 +60,10 @@ export async function createIdentityRecord(
 export async function openIdentityRecord(
   record: IdentityRecord,
   passcode: string,
-  iterations = PBKDF2_ITERATIONS
+  iterations = PBKDF2_ITERATIONS,
+  kdf: KdfId = record.kdf ?? LEGACY_KDF
 ): Promise<Identity> {
-  const seed = await unwrapRawVaultKey(passcode, record.keySalt, record.wrappedKey, iterations);
+  const seed = await unwrapRawVaultKey(passcode, record.keySalt, record.wrappedKey, iterations, kdf);
   const identity = identityFromSeed(seed);
   zeroKeyMaterial(seed);
   if (!identityValid(identity)) {

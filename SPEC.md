@@ -280,6 +280,13 @@ receipts file), so conversations with remote contacts show no ✓/✓✓.
 Authentication between vaults is key-based, not name-based: see the OM-2 spec
 for pinning, safety numbers, and the trust model.
 
+Stated limits of the OM-2 v1 construction (deliberate, documented — see the
+README's *Cross-vault mail* honest-limits): sealed boxes are static (no
+ratchet — no forward secrecy against a later long-term-key theft), first
+contact trusts the key the invite carried (a TOFU window that a safety-number
+comparison closes), and the relay observes destination, size, and timing for
+mail in flight.
+
 ## 14. Retransmission (optional, sender-side)
 
 A sync merge can clobber a sender's append after it was written: the block
@@ -318,10 +325,14 @@ Rules:
    GC (§7), conflict adoption (§7), and retransmission bookkeeping (§14) all
    work on sealed inboxes unchanged.
 2. **The key never touches disk.** The reference plugin derives a KEK from
-   an unlock secret via PBKDF2-SHA256 (per-vault salt; the round count is
-   stored beside the wrap — 600k currently, and an absent count means the
-   legacy 200k), wraps a random 256-bit vault key with it, and stores only
-   the wrapped form. The raw key exists in memory between unlock and
+   an unlock secret and wraps a random 256-bit vault key with it, storing
+   only the wrapped form. The KDF is recorded beside the wrap (`kdf` field):
+   current wraps use **Argon2id** (19 MiB, t=2, p=1 — memory-hard, so
+   offline guessing pays for RAM per guess); wraps from the PBKDF2 era carry
+   `kdf:"pbkdf2"` or no field at all (PBKDF2-SHA256; an absent iteration
+   count means the legacy 200k). Opening uses the recorded KDF — old bundles
+   stay openable, and any re-wrap (secret change, mode switch) upgrades to
+   Argon2id. The raw key exists in memory between unlock and
    lock/unload; changing the secret re-wraps the key without touching any
    mail. The unlock secret is either a passcode (minimum 8 characters, not
    digits-only) or a generated 125-bit vault key in Crockford base32

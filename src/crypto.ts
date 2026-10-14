@@ -1,29 +1,54 @@
 /**
  * At-rest body sealing (SPEC §15): AES-256-GCM over message bodies, with a
- * random per-vault key that is itself wrapped by a PBKDF2 key derived from
- * the passcode. The wrapped form is what data.json stores; the raw vault key
- * exists only in memory between unlock and lock/unload.
+ * random per-vault key that is itself wrapped by a key derived from the
+ * unlock secret. The KDF is Argon2id (memory-hard) for all new wraps; vaults
+ * wrapped in the PBKDF2 era open with PBKDF2 until their next re-wrap. The
+ * wrapped form is what data.json stores; the raw vault key exists only in
+ * memory between unlock and lock/unload.
  *
  * Envelope metadata (id/from/to/ts) stays plaintext on purpose — cursors,
  * dedup, GC, and non-plugin participants still work on sealed inboxes.
  * Deliberately free of "obsidian" imports so the unit suite can run it.
  */
 
+import { argon2id } from "@noble/hashes/argon2";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** OWASP-band stretch for PBKDF2-SHA256; unlock pays it once per session. */
+/**
+ * The KDF a wrap was sealed with. Absent in persisted settings/records means
+ * "pbkdf2" — everything wrapped before the field existed. New wraps use the
+ * DEFAULT_KDF.
+ */
+export type KdfId = "pbkdf2" | "argon2id";
+export const DEFAULT_KDF: KdfId = "argon2id";
+/** KDF for pre-field data — matches the absent-field reading, never wrap new. */
+export const LEGACY_KDF: KdfId = "pbkdf2";
+
+/** OWASP-band stretch for PBKDF2-SHA256 (the legacy KDF); unlock-only cost. */
 export const PBKDF2_ITERATIONS = 600_000;
 /**
  * Rounds used by vaults wrapped before the count was persisted — data.json
  * without a kdfIterations field means this. Only read with, never wrap new.
  */
 export const LEGACY_PBKDF2_ITERATIONS = 200_000;
+
+/**
+ * Argon2id parameters (new wraps): 19 MiB / t=2 / p=1 — the OWASP Password
+ * Storage Cheat Sheet's first recommendation band. Memory-hardness is the
+ * point: GPU/ASIC offline guessing pays per-guess for RAM, which PBKDF2
+ * never charged. Unlock pays it once per session.
+ */
+export const ARGON2ID_MEMORY_KIB = 19_456; // 19 MiB
+export const ARGON2ID_TIME = 2;
+export const ARGON2ID_PARALLELISM = 1;
+
 /** AES-GCM IV length in bytes (NIST SP 800-38D minimum for 96-bit). */
 const IV_BYTES = 12;
 /** Vault key length in bytes (AES-256). */
 const KEY_BYTES = 32;
-/** PBKDF2 salt length in bytes. */
+/** KDF salt length in bytes (16 = both PBKDF2 and Argon2id happy). */
 const SALT_BYTES = 16;
 
 function subtle(): SubtleCrypto {
@@ -88,22 +113,47 @@ export function makeKeySalt(): string {
   return randomHex(SALT_BYTES);
 }
 
-/** The KEK: AES-GCM key derived from passcode + salt via PBKDF2-SHA256. */
+/**
+ * The KEK input: 32 bytes derived from the unlock secret. Argon2id for new
+ * wraps (memory-hard), PBKDF2-SHA256 only to open legacy-era material.
+ */
+async function deriveKekBytes(
+  passcode: string,
+  saltHex: string,
+  kdf: KdfId,
+  iterations: number
+): Promise<Uint8Array> {
+  const secret = encoder.encode(passcode.trim());
+  if (kdf === "argon2id") {
+    return argon2id(secret, hexToBytes(saltHex), {
+      t: ARGON2ID_TIME,
+      m: ARGON2ID_MEMORY_KIB,
+      p: ARGON2ID_PARALLELISM,
+    });
+  }
+  const material = await subtle().importKey("raw", secret, "PBKDF2", false, [
+    "deriveBits",
+  ]);
+  return new Uint8Array(
+    await subtle().deriveBits(
+      { name: "PBKDF2", salt: hexToBytes(saltHex), iterations, hash: "SHA-256" },
+      material,
+      256
+    )
+  );
+}
+
+/** The KEK: AES-GCM key built from the derived bytes. */
 async function deriveKek(
   passcode: string,
   saltHex: string,
+  kdf: KdfId,
   iterations: number
 ): Promise<CryptoKey> {
-  const material = await subtle().importKey(
+  const bytes = await deriveKekBytes(passcode, saltHex, kdf, iterations);
+  return subtle().importKey(
     "raw",
-    encoder.encode(passcode.trim()),
-    "PBKDF2",
-    false,
-    ["deriveKey"]
-  );
-  return subtle().deriveKey(
-    { name: "PBKDF2", salt: hexToBytes(saltHex), iterations, hash: "SHA-256" },
-    material,
+    bytes,
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt", "decrypt"]
@@ -155,14 +205,16 @@ async function cipherFromRawKey(raw: Uint8Array): Promise<VaultCipher> {
 /**
  * Everything data.json needs to restore the key later: a fresh vault key,
  * wrapped by a KEK from this passcode + a fresh salt. Returns the live cipher
- * for the session plus the persisted bundle.
+ * for the session plus the persisted bundle. New wraps default to Argon2id;
+ * pass kdf="pbkdf2" only to exercise the legacy path (tests).
  */
 export async function createWrappedVaultKey(
   passcode: string,
-  iterations = PBKDF2_ITERATIONS
+  iterations = PBKDF2_ITERATIONS,
+  kdf: KdfId = DEFAULT_KDF
 ): Promise<{ keySalt: string; wrappedKey: string; cipher: VaultCipher }> {
   const keySalt = makeKeySalt();
-  const kek = await deriveKek(passcode, keySalt, iterations);
+  const kek = await deriveKek(passcode, keySalt, kdf, iterations);
   const vk = window.crypto.getRandomValues(new Uint8Array(KEY_BYTES));
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const wrapped = new Uint8Array(
@@ -181,15 +233,17 @@ export async function createWrappedVaultKey(
 /**
  * Recover the vault cipher from a passcode. Throws on a wrong passcode (the
  * GCM tag fails), on tampered material, or when WebCrypto is missing — the
- * unlock flow treats any throw as "wrong passcode".
+ * unlock flow treats any throw as "wrong passcode". The KDF must match the
+ * one the bundle was wrapped with (persisted alongside it).
  */
 export async function openWrappedVaultKey(
   passcode: string,
   keySalt: string,
   wrappedKey: string,
-  iterations = PBKDF2_ITERATIONS
+  iterations = PBKDF2_ITERATIONS,
+  kdf: KdfId = DEFAULT_KDF
 ): Promise<VaultCipher> {
-  const kek = await deriveKek(passcode, keySalt, iterations);
+  const kek = await deriveKek(passcode, keySalt, kdf, iterations);
   const bundle = fromB64(wrappedKey);
   const iv = bundle.subarray(0, IV_BYTES);
   const wrapped = bundle.subarray(IV_BYTES);
@@ -202,15 +256,16 @@ export async function openWrappedVaultKey(
 
 /**
  * Re-wrap raw vault-key bytes under a new passcode. Returns the replacement
- * bundle to persist.
+ * bundle to persist. New wraps default to Argon2id.
  */
 export async function rewrapRawVaultKey(
   rawKey: Uint8Array,
   newPasscode: string,
-  iterations = PBKDF2_ITERATIONS
+  iterations = PBKDF2_ITERATIONS,
+  kdf: KdfId = DEFAULT_KDF
 ): Promise<{ keySalt: string; wrappedKey: string }> {
   const keySalt = makeKeySalt();
-  const kek = await deriveKek(newPasscode, keySalt, iterations);
+  const kek = await deriveKek(newPasscode, keySalt, kdf, iterations);
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const wrapped = new Uint8Array(
     await subtle().encrypt({ name: "AES-GCM", iv }, kek, rawKey)
@@ -230,9 +285,10 @@ export async function unwrapRawVaultKey(
   passcode: string,
   keySalt: string,
   wrappedKey: string,
-  iterations = PBKDF2_ITERATIONS
+  iterations = PBKDF2_ITERATIONS,
+  kdf: KdfId = DEFAULT_KDF
 ): Promise<Uint8Array> {
-  const kek = await deriveKek(passcode, keySalt, iterations);
+  const kek = await deriveKek(passcode, keySalt, kdf, iterations);
   const bundle = fromB64(wrappedKey);
   const vk = new Uint8Array(
     await subtle().decrypt(

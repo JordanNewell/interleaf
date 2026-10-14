@@ -23,6 +23,8 @@ import {
 } from "./passcode";
 import {
   createWrappedVaultKey,
+  DEFAULT_KDF,
+  LEGACY_KDF,
   LEGACY_PBKDF2_ITERATIONS,
   normalizeVaultKey,
   openWrappedVaultKey,
@@ -1266,7 +1268,8 @@ export default class ObsidianMessengerPlugin extends Plugin {
         this.unlockSecret(candidate),
         this.settings.keySalt,
         this.settings.wrappedKey,
-        this.settings.kdfIterations
+        this.settings.kdfIterations,
+        this.settings.kdf
       );
     } catch {
       return null;
@@ -1275,7 +1278,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
 
   /**
    * Verify the unlock secret — the one gate for every sensitive action.
-   * With sealing on, verification IS the unwrap (full PBKDF2 per attempt);
+   * With sealing on, verification IS the unwrap (full KDF run per attempt);
    * without it, the UI-gate hash answers.
    */
   async verifyAuth(candidate: string): Promise<boolean> {
@@ -1302,12 +1305,13 @@ export default class ObsidianMessengerPlugin extends Plugin {
           `Encryption needs a stronger passcode — at least 8 characters, not digits-only`
         );
       }
-      const bundle = await createWrappedVaultKey(passcode, PBKDF2_ITERATIONS);
+      const bundle = await createWrappedVaultKey(passcode);
       this.settings.passcodeHash = "";
       this.settings.passcodeSalt = "";
       this.settings.keySalt = bundle.keySalt;
       this.settings.wrappedKey = bundle.wrappedKey;
       this.settings.kdfIterations = PBKDF2_ITERATIONS;
+      this.settings.kdf = DEFAULT_KDF;
       this.settings.authMode = "passcode";
       this.settings.encryptMail = true;
       this.applyCipher(bundle.cipher);
@@ -1333,13 +1337,16 @@ export default class ObsidianMessengerPlugin extends Plugin {
           this.unlockSecret(current),
           this.settings.keySalt,
           this.settings.wrappedKey,
-          this.settings.kdfIterations
+          this.settings.kdfIterations,
+          this.settings.kdf
         );
-        const bundle = await rewrapRawVaultKey(raw, next, PBKDF2_ITERATIONS);
+        // re-wrap upgrades the KDF in step with the secret change
+        const bundle = await rewrapRawVaultKey(raw, next);
         zeroKeyMaterial(raw); // the re-wrap copied it; the buffer is done
         this.settings.keySalt = bundle.keySalt;
         this.settings.wrappedKey = bundle.wrappedKey;
         this.settings.kdfIterations = PBKDF2_ITERATIONS;
+        this.settings.kdf = DEFAULT_KDF;
         this.settings.authMode = "passcode";
         this.settings.passcodeHash = "";
         this.settings.passcodeSalt = "";
@@ -1360,11 +1367,12 @@ export default class ObsidianMessengerPlugin extends Plugin {
     if (om2Record) {
       try {
         const identity = await openIdentityRecord(om2Record, this.unlockSecret(current));
-        const rebundled = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), next, PBKDF2_ITERATIONS);
+        const rebundled = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), next);
         await saveIdentityRecord(this.om2Kv, {
           ...om2Record,
           keySalt: rebundled.keySalt,
           wrappedKey: rebundled.wrappedKey,
+          kdf: DEFAULT_KDF,
         });
       } catch (err) {
         console.error("[message-bus] om2 identity re-wrap failed", err);
@@ -1388,12 +1396,13 @@ export default class ObsidianMessengerPlugin extends Plugin {
       );
     }
     if (!webcryptoAvailable()) throw new Error("WebCrypto unavailable here");
-    const bundle = await createWrappedVaultKey(passcode, PBKDF2_ITERATIONS);
+    const bundle = await createWrappedVaultKey(passcode);
     this.applyCipher(bundle.cipher);
     const { messages } = await this.store.rewriteAll(true);
     this.settings.keySalt = bundle.keySalt;
     this.settings.wrappedKey = bundle.wrappedKey;
     this.settings.kdfIterations = PBKDF2_ITERATIONS;
+    this.settings.kdf = DEFAULT_KDF;
     this.settings.authMode = "passcode";
     this.settings.passcodeHash = "";
     this.settings.passcodeSalt = "";
@@ -1413,12 +1422,13 @@ export default class ObsidianMessengerPlugin extends Plugin {
     if (!webcryptoAvailable()) throw new Error("WebCrypto unavailable here");
     if (this.hasKeyBundle()) throw new Error("Encryption is already on");
     if (!normalizeVaultKey(key)) throw new Error("Malformed vault key");
-    const bundle = await createWrappedVaultKey(key, PBKDF2_ITERATIONS);
+    const bundle = await createWrappedVaultKey(key);
     this.applyCipher(bundle.cipher);
     const { messages } = await this.store.rewriteAll(true);
     this.settings.keySalt = bundle.keySalt;
     this.settings.wrappedKey = bundle.wrappedKey;
     this.settings.kdfIterations = PBKDF2_ITERATIONS;
+    this.settings.kdf = DEFAULT_KDF;
     this.settings.authMode = "key";
     this.settings.passcodeHash = "";
     this.settings.passcodeSalt = "";
@@ -1441,16 +1451,18 @@ export default class ObsidianMessengerPlugin extends Plugin {
         this.unlockSecret(currentSecret),
         this.settings.keySalt,
         this.settings.wrappedKey,
-        this.settings.kdfIterations
+        this.settings.kdfIterations,
+        this.settings.kdf
       );
     } catch {
       throw new Error("Wrong passcode or key");
     }
-    const bundle = await rewrapRawVaultKey(raw, key, PBKDF2_ITERATIONS);
+    const bundle = await rewrapRawVaultKey(raw, key);
     zeroKeyMaterial(raw); // the re-wrap copied it; the buffer is done
     this.settings.keySalt = bundle.keySalt;
     this.settings.wrappedKey = bundle.wrappedKey;
     this.settings.kdfIterations = PBKDF2_ITERATIONS;
+    this.settings.kdf = DEFAULT_KDF;
     this.settings.authMode = "key";
     this.settings.passcodeHash = "";
     this.settings.passcodeSalt = "";
@@ -1472,6 +1484,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
     this.settings.keySalt = "";
     this.settings.wrappedKey = "";
     this.settings.kdfIterations = LEGACY_PBKDF2_ITERATIONS;
+    this.settings.kdf = LEGACY_KDF;
     const wasKeyMode = this.settings.authMode === "key";
     this.settings.authMode = "passcode";
     if (!wasKeyMode && !this.settings.passcodeHash) {
@@ -1592,7 +1605,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
 
   /**
    * Try the unlock secret against one conversation's lock. True when it
-   * opened. Async: with sealing on, each attempt is a full PBKDF2 unwrap.
+   * opened. Async: with sealing on, each attempt is a full KDF unwrap.
    */
   async tryUnlockPeer(peer: string, candidate: string): Promise<boolean> {
     if (!(await this.verifyAuth(candidate))) return false;

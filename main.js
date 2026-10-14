@@ -1816,7 +1816,7 @@ var require_nacl_fast = __commonJS({
         for (i = 0; i < 8; i++) ts64(out, 8 * i, hh[i], hl[i]);
         return 0;
       }
-      function add(p, q) {
+      function add2(p, q) {
         var a = gf(), b = gf(), c = gf(), d = gf(), e = gf(), f = gf(), g = gf(), h = gf(), t = gf();
         Z(a, p[1], p[0]);
         Z(t, q[1], q[0]);
@@ -1860,8 +1860,8 @@ var require_nacl_fast = __commonJS({
         for (i = 255; i >= 0; --i) {
           b = s[i / 8 | 0] >> (i & 7) & 1;
           cswap(p, q, b);
-          add(q, p);
-          add(p, p);
+          add2(q, p);
+          add2(p, p);
           cswap(p, q, b);
         }
       }
@@ -1986,7 +1986,7 @@ var require_nacl_fast = __commonJS({
         reduce(h);
         scalarmult(p, q, h);
         scalarbase(q, sm.subarray(32));
-        add(p, q);
+        add2(p, q);
         pack(t, p);
         n -= 64;
         if (crypto_verify_32(sm, 0, t, 0)) {
@@ -2047,7 +2047,7 @@ var require_nacl_fast = __commonJS({
         S,
         Z,
         pow2523,
-        add,
+        add: add2,
         set25519,
         modL,
         scalarmult,
@@ -2490,19 +2490,19 @@ var MailBus = class {
       this.store.readInbox(peer)
     ]);
     const byId = /* @__PURE__ */ new Map();
-    const add = (m) => {
+    const add2 = (m) => {
       if (!byId.has(m.id)) byId.set(m.id, m);
     };
     if (peer === me) {
-      mine.filter((m) => m.from === me).forEach(add);
+      mine.filter((m) => m.from === me).forEach(add2);
       if (this.keepOutbox) {
-        (await this.store.readOutbox(me)).filter((m) => m.to === me).forEach(add);
+        (await this.store.readOutbox(me)).filter((m) => m.to === me).forEach(add2);
       }
     } else {
-      mine.filter((m) => m.from === peer).forEach(add);
-      theirs.filter((m) => m.from === me).forEach(add);
+      mine.filter((m) => m.from === peer).forEach(add2);
+      theirs.filter((m) => m.from === me).forEach(add2);
       if (this.keepOutbox) {
-        (await this.store.readOutbox(me)).filter((m) => m.to === peer).forEach(add);
+        (await this.store.readOutbox(me)).filter((m) => m.to === peer).forEach(add2);
       }
     }
     const readAt = this.readAtSource?.()[peer];
@@ -3467,11 +3467,11 @@ var MailboxStore = class {
   async append(address, message) {
     await ensureFolder(this.adapter, `${this.root}/${address}`);
     const path = this.inboxPath(address);
-    const { block, sealed } = await this.encodeBlock(message);
+    const { block: block2, sealed } = await this.encodeBlock(message);
     if (await this.adapter.exists(path)) {
-      await this.adapter.append(path, block);
+      await this.adapter.append(path, block2);
     } else {
-      await this.adapter.append(path, inboxHeader(address) + block);
+      await this.adapter.append(path, inboxHeader(address) + block2);
     }
     return sealed;
   }
@@ -3516,12 +3516,12 @@ var MailboxStore = class {
   async appendOutbox(address, message) {
     await ensureFolder(this.adapter, `${this.root}/${address}`);
     const path = this.outboxPath(address);
-    const { block, sealed } = await this.encodeBlock(message);
+    const { block: block2, sealed } = await this.encodeBlock(message);
     this.inboxCache.delete(path);
     if (await this.adapter.exists(path)) {
-      await this.adapter.append(path, block);
+      await this.adapter.append(path, block2);
     } else {
-      await this.adapter.append(path, outboxHeader(address) + block);
+      await this.adapter.append(path, outboxHeader(address) + block2);
     }
     return sealed;
   }
@@ -3603,13 +3603,13 @@ var MailboxStore = class {
     });
   }
   /** Append one receipt block to an address's receipts file (creating it). */
-  async appendReceiptBlock(address, block) {
+  async appendReceiptBlock(address, block2) {
     await ensureFolder(this.adapter, `${this.root}/${address}`);
     const path = this.receiptsPath(address);
     if (await this.adapter.exists(path)) {
-      await this.adapter.append(path, block);
+      await this.adapter.append(path, block2);
     } else {
-      await this.adapter.append(path, receiptsHeader(address) + block);
+      await this.adapter.append(path, receiptsHeader(address) + block2);
     }
   }
   async readReceiptsRaw(address) {
@@ -4160,11 +4160,884 @@ function verifyPasscode(candidate, salt, expectedHash) {
   return constantTimeEqual(hashPasscode(candidate, salt), expectedHash);
 }
 
+// node_modules/@noble/hashes/esm/_assert.js
+function number(n) {
+  if (!Number.isSafeInteger(n) || n < 0)
+    throw new Error(`positive integer expected, not ${n}`);
+}
+function isBytes(a) {
+  return a instanceof Uint8Array || a != null && typeof a === "object" && a.constructor.name === "Uint8Array";
+}
+function bytes(b, ...lengths) {
+  if (!isBytes(b))
+    throw new Error("Uint8Array expected");
+  if (lengths.length > 0 && !lengths.includes(b.length))
+    throw new Error(`Uint8Array expected of length ${lengths}, not of length=${b.length}`);
+}
+function exists(instance, checkFinished = true) {
+  if (instance.destroyed)
+    throw new Error("Hash instance has been destroyed");
+  if (checkFinished && instance.finished)
+    throw new Error("Hash#digest() has already been called");
+}
+function output(out, instance) {
+  bytes(out);
+  const min = instance.outputLen;
+  if (out.length < min) {
+    throw new Error(`digestInto() expects output buffer of length at least ${min}`);
+  }
+}
+
+// node_modules/@noble/hashes/esm/utils.js
+var u8 = (arr) => new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+var u32 = (arr) => new Uint32Array(arr.buffer, arr.byteOffset, Math.floor(arr.byteLength / 4));
+var createView = (arr) => new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
+var rotr2 = (word, shift) => word << 32 - shift | word >>> shift;
+var isLE = new Uint8Array(new Uint32Array([287454020]).buffer)[0] === 68;
+var byteSwap = (word) => word << 24 & 4278190080 | word << 8 & 16711680 | word >>> 8 & 65280 | word >>> 24 & 255;
+var byteSwapIfBE = isLE ? (n) => n : (n) => byteSwap(n);
+function byteSwap32(arr) {
+  for (let i = 0; i < arr.length; i++) {
+    arr[i] = byteSwap(arr[i]);
+  }
+}
+function utf8ToBytes(str) {
+  if (typeof str !== "string")
+    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
+  return new Uint8Array(new TextEncoder().encode(str));
+}
+function toBytes(data) {
+  if (typeof data === "string")
+    data = utf8ToBytes(data);
+  bytes(data);
+  return data;
+}
+var Hash = class {
+  // Safe version that clones internal state
+  clone() {
+    return this._cloneInto();
+  }
+};
+var toStr = {}.toString;
+function wrapConstructor(hashCons) {
+  const hashC = (msg) => hashCons().update(toBytes(msg)).digest();
+  const tmp = hashCons();
+  hashC.outputLen = tmp.outputLen;
+  hashC.blockLen = tmp.blockLen;
+  hashC.create = () => hashCons();
+  return hashC;
+}
+function wrapConstructorWithOpts(hashCons) {
+  const hashC = (msg, opts) => hashCons(opts).update(toBytes(msg)).digest();
+  const tmp = hashCons({});
+  hashC.outputLen = tmp.outputLen;
+  hashC.blockLen = tmp.blockLen;
+  hashC.create = (opts) => hashCons(opts);
+  return hashC;
+}
+
+// node_modules/@noble/hashes/esm/_blake.js
+var SIGMA = /* @__PURE__ */ new Uint8Array([
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  14,
+  10,
+  4,
+  8,
+  9,
+  15,
+  13,
+  6,
+  1,
+  12,
+  0,
+  2,
+  11,
+  7,
+  5,
+  3,
+  11,
+  8,
+  12,
+  0,
+  5,
+  2,
+  15,
+  13,
+  10,
+  14,
+  3,
+  6,
+  7,
+  1,
+  9,
+  4,
+  7,
+  9,
+  3,
+  1,
+  13,
+  12,
+  11,
+  14,
+  2,
+  6,
+  5,
+  10,
+  4,
+  0,
+  15,
+  8,
+  9,
+  0,
+  5,
+  7,
+  2,
+  4,
+  10,
+  15,
+  14,
+  1,
+  11,
+  12,
+  6,
+  8,
+  3,
+  13,
+  2,
+  12,
+  6,
+  10,
+  0,
+  11,
+  8,
+  3,
+  4,
+  13,
+  7,
+  5,
+  15,
+  14,
+  1,
+  9,
+  12,
+  5,
+  1,
+  15,
+  14,
+  13,
+  4,
+  10,
+  0,
+  7,
+  6,
+  3,
+  9,
+  2,
+  8,
+  11,
+  13,
+  11,
+  7,
+  14,
+  12,
+  1,
+  3,
+  9,
+  5,
+  0,
+  15,
+  4,
+  8,
+  6,
+  2,
+  10,
+  6,
+  15,
+  14,
+  9,
+  11,
+  3,
+  0,
+  8,
+  12,
+  2,
+  13,
+  7,
+  1,
+  4,
+  10,
+  5,
+  10,
+  2,
+  8,
+  4,
+  7,
+  6,
+  1,
+  5,
+  15,
+  11,
+  9,
+  14,
+  3,
+  12,
+  13,
+  0,
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  14,
+  10,
+  4,
+  8,
+  9,
+  15,
+  13,
+  6,
+  1,
+  12,
+  0,
+  2,
+  11,
+  7,
+  5,
+  3
+]);
+var BLAKE = class extends Hash {
+  constructor(blockLen, outputLen, opts = {}, keyLen, saltLen, persLen) {
+    super();
+    this.blockLen = blockLen;
+    this.outputLen = outputLen;
+    this.length = 0;
+    this.pos = 0;
+    this.finished = false;
+    this.destroyed = false;
+    number(blockLen);
+    number(outputLen);
+    number(keyLen);
+    if (outputLen < 0 || outputLen > keyLen)
+      throw new Error("outputLen bigger than keyLen");
+    if (opts.key !== void 0 && (opts.key.length < 1 || opts.key.length > keyLen))
+      throw new Error(`key must be up 1..${keyLen} byte long or undefined`);
+    if (opts.salt !== void 0 && opts.salt.length !== saltLen)
+      throw new Error(`salt must be ${saltLen} byte long or undefined`);
+    if (opts.personalization !== void 0 && opts.personalization.length !== persLen)
+      throw new Error(`personalization must be ${persLen} byte long or undefined`);
+    this.buffer32 = u32(this.buffer = new Uint8Array(blockLen));
+  }
+  update(data) {
+    exists(this);
+    const { blockLen, buffer, buffer32 } = this;
+    data = toBytes(data);
+    const len = data.length;
+    const offset = data.byteOffset;
+    const buf = data.buffer;
+    for (let pos = 0; pos < len; ) {
+      if (this.pos === blockLen) {
+        if (!isLE)
+          byteSwap32(buffer32);
+        this.compress(buffer32, 0, false);
+        if (!isLE)
+          byteSwap32(buffer32);
+        this.pos = 0;
+      }
+      const take = Math.min(blockLen - this.pos, len - pos);
+      const dataOffset = offset + pos;
+      if (take === blockLen && !(dataOffset % 4) && pos + take < len) {
+        const data32 = new Uint32Array(buf, dataOffset, Math.floor((len - pos) / 4));
+        if (!isLE)
+          byteSwap32(data32);
+        for (let pos32 = 0; pos + blockLen < len; pos32 += buffer32.length, pos += blockLen) {
+          this.length += blockLen;
+          this.compress(data32, pos32, false);
+        }
+        if (!isLE)
+          byteSwap32(data32);
+        continue;
+      }
+      buffer.set(data.subarray(pos, pos + take), this.pos);
+      this.pos += take;
+      this.length += take;
+      pos += take;
+    }
+    return this;
+  }
+  digestInto(out) {
+    exists(this);
+    output(out, this);
+    const { pos, buffer32 } = this;
+    this.finished = true;
+    this.buffer.subarray(pos).fill(0);
+    if (!isLE)
+      byteSwap32(buffer32);
+    this.compress(buffer32, 0, true);
+    if (!isLE)
+      byteSwap32(buffer32);
+    const out32 = u32(out);
+    this.get().forEach((v, i) => out32[i] = byteSwapIfBE(v));
+  }
+  digest() {
+    const { buffer, outputLen } = this;
+    this.digestInto(buffer);
+    const res = buffer.slice(0, outputLen);
+    this.destroy();
+    return res;
+  }
+  _cloneInto(to) {
+    const { buffer, length, finished, destroyed, outputLen, pos } = this;
+    to || (to = new this.constructor({ dkLen: outputLen }));
+    to.set(...this.get());
+    to.length = length;
+    to.finished = finished;
+    to.destroyed = destroyed;
+    to.outputLen = outputLen;
+    to.buffer.set(buffer);
+    to.pos = pos;
+    return to;
+  }
+};
+
+// node_modules/@noble/hashes/esm/_u64.js
+var U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
+var _32n = /* @__PURE__ */ BigInt(32);
+function fromBig(n, le = false) {
+  if (le)
+    return { h: Number(n & U32_MASK64), l: Number(n >> _32n & U32_MASK64) };
+  return { h: Number(n >> _32n & U32_MASK64) | 0, l: Number(n & U32_MASK64) | 0 };
+}
+function split(lst, le = false) {
+  let Ah = new Uint32Array(lst.length);
+  let Al = new Uint32Array(lst.length);
+  for (let i = 0; i < lst.length; i++) {
+    const { h, l } = fromBig(lst[i], le);
+    [Ah[i], Al[i]] = [h, l];
+  }
+  return [Ah, Al];
+}
+var toBig = (h, l) => BigInt(h >>> 0) << _32n | BigInt(l >>> 0);
+var shrSH = (h, _l, s) => h >>> s;
+var shrSL = (h, l, s) => h << 32 - s | l >>> s;
+var rotrSH = (h, l, s) => h >>> s | l << 32 - s;
+var rotrSL = (h, l, s) => h << 32 - s | l >>> s;
+var rotrBH = (h, l, s) => h << 64 - s | l >>> s - 32;
+var rotrBL = (h, l, s) => h >>> s - 32 | l << 64 - s;
+var rotr32H = (_h, l) => l;
+var rotr32L = (h, _l) => h;
+var rotlSH = (h, l, s) => h << s | l >>> 32 - s;
+var rotlSL = (h, l, s) => l << s | h >>> 32 - s;
+var rotlBH = (h, l, s) => l << s - 32 | h >>> 64 - s;
+var rotlBL = (h, l, s) => h << s - 32 | l >>> 64 - s;
+function add(Ah, Al, Bh, Bl) {
+  const l = (Al >>> 0) + (Bl >>> 0);
+  return { h: Ah + Bh + (l / 2 ** 32 | 0) | 0, l: l | 0 };
+}
+var add3L = (Al, Bl, Cl) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0);
+var add3H = (low, Ah, Bh, Ch) => Ah + Bh + Ch + (low / 2 ** 32 | 0) | 0;
+var add4L = (Al, Bl, Cl, Dl) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0);
+var add4H = (low, Ah, Bh, Ch, Dh) => Ah + Bh + Ch + Dh + (low / 2 ** 32 | 0) | 0;
+var add5L = (Al, Bl, Cl, Dl, El) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0);
+var add5H = (low, Ah, Bh, Ch, Dh, Eh) => Ah + Bh + Ch + Dh + Eh + (low / 2 ** 32 | 0) | 0;
+var u64 = {
+  fromBig,
+  split,
+  toBig,
+  shrSH,
+  shrSL,
+  rotrSH,
+  rotrSL,
+  rotrBH,
+  rotrBL,
+  rotr32H,
+  rotr32L,
+  rotlSH,
+  rotlSL,
+  rotlBH,
+  rotlBL,
+  add,
+  add3L,
+  add3H,
+  add4L,
+  add4H,
+  add5H,
+  add5L
+};
+var u64_default = u64;
+
+// node_modules/@noble/hashes/esm/blake2b.js
+var B2B_IV = /* @__PURE__ */ new Uint32Array([
+  4089235720,
+  1779033703,
+  2227873595,
+  3144134277,
+  4271175723,
+  1013904242,
+  1595750129,
+  2773480762,
+  2917565137,
+  1359893119,
+  725511199,
+  2600822924,
+  4215389547,
+  528734635,
+  327033209,
+  1541459225
+]);
+var BBUF = /* @__PURE__ */ new Uint32Array(32);
+function G1b(a, b, c, d, msg, x) {
+  const Xl = msg[x], Xh = msg[x + 1];
+  let Al = BBUF[2 * a], Ah = BBUF[2 * a + 1];
+  let Bl = BBUF[2 * b], Bh = BBUF[2 * b + 1];
+  let Cl = BBUF[2 * c], Ch = BBUF[2 * c + 1];
+  let Dl = BBUF[2 * d], Dh = BBUF[2 * d + 1];
+  let ll = u64_default.add3L(Al, Bl, Xl);
+  Ah = u64_default.add3H(ll, Ah, Bh, Xh);
+  Al = ll | 0;
+  ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
+  ({ Dh, Dl } = { Dh: u64_default.rotr32H(Dh, Dl), Dl: u64_default.rotr32L(Dh, Dl) });
+  ({ h: Ch, l: Cl } = u64_default.add(Ch, Cl, Dh, Dl));
+  ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
+  ({ Bh, Bl } = { Bh: u64_default.rotrSH(Bh, Bl, 24), Bl: u64_default.rotrSL(Bh, Bl, 24) });
+  BBUF[2 * a] = Al, BBUF[2 * a + 1] = Ah;
+  BBUF[2 * b] = Bl, BBUF[2 * b + 1] = Bh;
+  BBUF[2 * c] = Cl, BBUF[2 * c + 1] = Ch;
+  BBUF[2 * d] = Dl, BBUF[2 * d + 1] = Dh;
+}
+function G2b(a, b, c, d, msg, x) {
+  const Xl = msg[x], Xh = msg[x + 1];
+  let Al = BBUF[2 * a], Ah = BBUF[2 * a + 1];
+  let Bl = BBUF[2 * b], Bh = BBUF[2 * b + 1];
+  let Cl = BBUF[2 * c], Ch = BBUF[2 * c + 1];
+  let Dl = BBUF[2 * d], Dh = BBUF[2 * d + 1];
+  let ll = u64_default.add3L(Al, Bl, Xl);
+  Ah = u64_default.add3H(ll, Ah, Bh, Xh);
+  Al = ll | 0;
+  ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
+  ({ Dh, Dl } = { Dh: u64_default.rotrSH(Dh, Dl, 16), Dl: u64_default.rotrSL(Dh, Dl, 16) });
+  ({ h: Ch, l: Cl } = u64_default.add(Ch, Cl, Dh, Dl));
+  ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
+  ({ Bh, Bl } = { Bh: u64_default.rotrBH(Bh, Bl, 63), Bl: u64_default.rotrBL(Bh, Bl, 63) });
+  BBUF[2 * a] = Al, BBUF[2 * a + 1] = Ah;
+  BBUF[2 * b] = Bl, BBUF[2 * b + 1] = Bh;
+  BBUF[2 * c] = Cl, BBUF[2 * c + 1] = Ch;
+  BBUF[2 * d] = Dl, BBUF[2 * d + 1] = Dh;
+}
+var BLAKE2b = class extends BLAKE {
+  constructor(opts = {}) {
+    super(128, opts.dkLen === void 0 ? 64 : opts.dkLen, opts, 64, 16, 16);
+    this.v0l = B2B_IV[0] | 0;
+    this.v0h = B2B_IV[1] | 0;
+    this.v1l = B2B_IV[2] | 0;
+    this.v1h = B2B_IV[3] | 0;
+    this.v2l = B2B_IV[4] | 0;
+    this.v2h = B2B_IV[5] | 0;
+    this.v3l = B2B_IV[6] | 0;
+    this.v3h = B2B_IV[7] | 0;
+    this.v4l = B2B_IV[8] | 0;
+    this.v4h = B2B_IV[9] | 0;
+    this.v5l = B2B_IV[10] | 0;
+    this.v5h = B2B_IV[11] | 0;
+    this.v6l = B2B_IV[12] | 0;
+    this.v6h = B2B_IV[13] | 0;
+    this.v7l = B2B_IV[14] | 0;
+    this.v7h = B2B_IV[15] | 0;
+    const keyLength = opts.key ? opts.key.length : 0;
+    this.v0l ^= this.outputLen | keyLength << 8 | 1 << 16 | 1 << 24;
+    if (opts.salt) {
+      const salt = u32(toBytes(opts.salt));
+      this.v4l ^= byteSwapIfBE(salt[0]);
+      this.v4h ^= byteSwapIfBE(salt[1]);
+      this.v5l ^= byteSwapIfBE(salt[2]);
+      this.v5h ^= byteSwapIfBE(salt[3]);
+    }
+    if (opts.personalization) {
+      const pers = u32(toBytes(opts.personalization));
+      this.v6l ^= byteSwapIfBE(pers[0]);
+      this.v6h ^= byteSwapIfBE(pers[1]);
+      this.v7l ^= byteSwapIfBE(pers[2]);
+      this.v7h ^= byteSwapIfBE(pers[3]);
+    }
+    if (opts.key) {
+      const tmp = new Uint8Array(this.blockLen);
+      tmp.set(toBytes(opts.key));
+      this.update(tmp);
+    }
+  }
+  // prettier-ignore
+  get() {
+    let { v0l, v0h, v1l, v1h, v2l, v2h, v3l, v3h, v4l, v4h, v5l, v5h, v6l, v6h, v7l, v7h } = this;
+    return [v0l, v0h, v1l, v1h, v2l, v2h, v3l, v3h, v4l, v4h, v5l, v5h, v6l, v6h, v7l, v7h];
+  }
+  // prettier-ignore
+  set(v0l, v0h, v1l, v1h, v2l, v2h, v3l, v3h, v4l, v4h, v5l, v5h, v6l, v6h, v7l, v7h) {
+    this.v0l = v0l | 0;
+    this.v0h = v0h | 0;
+    this.v1l = v1l | 0;
+    this.v1h = v1h | 0;
+    this.v2l = v2l | 0;
+    this.v2h = v2h | 0;
+    this.v3l = v3l | 0;
+    this.v3h = v3h | 0;
+    this.v4l = v4l | 0;
+    this.v4h = v4h | 0;
+    this.v5l = v5l | 0;
+    this.v5h = v5h | 0;
+    this.v6l = v6l | 0;
+    this.v6h = v6h | 0;
+    this.v7l = v7l | 0;
+    this.v7h = v7h | 0;
+  }
+  compress(msg, offset, isLast) {
+    this.get().forEach((v, i) => BBUF[i] = v);
+    BBUF.set(B2B_IV, 16);
+    let { h, l } = u64_default.fromBig(BigInt(this.length));
+    BBUF[24] = B2B_IV[8] ^ l;
+    BBUF[25] = B2B_IV[9] ^ h;
+    if (isLast) {
+      BBUF[28] = ~BBUF[28];
+      BBUF[29] = ~BBUF[29];
+    }
+    let j = 0;
+    const s = SIGMA;
+    for (let i = 0; i < 12; i++) {
+      G1b(0, 4, 8, 12, msg, offset + 2 * s[j++]);
+      G2b(0, 4, 8, 12, msg, offset + 2 * s[j++]);
+      G1b(1, 5, 9, 13, msg, offset + 2 * s[j++]);
+      G2b(1, 5, 9, 13, msg, offset + 2 * s[j++]);
+      G1b(2, 6, 10, 14, msg, offset + 2 * s[j++]);
+      G2b(2, 6, 10, 14, msg, offset + 2 * s[j++]);
+      G1b(3, 7, 11, 15, msg, offset + 2 * s[j++]);
+      G2b(3, 7, 11, 15, msg, offset + 2 * s[j++]);
+      G1b(0, 5, 10, 15, msg, offset + 2 * s[j++]);
+      G2b(0, 5, 10, 15, msg, offset + 2 * s[j++]);
+      G1b(1, 6, 11, 12, msg, offset + 2 * s[j++]);
+      G2b(1, 6, 11, 12, msg, offset + 2 * s[j++]);
+      G1b(2, 7, 8, 13, msg, offset + 2 * s[j++]);
+      G2b(2, 7, 8, 13, msg, offset + 2 * s[j++]);
+      G1b(3, 4, 9, 14, msg, offset + 2 * s[j++]);
+      G2b(3, 4, 9, 14, msg, offset + 2 * s[j++]);
+    }
+    this.v0l ^= BBUF[0] ^ BBUF[16];
+    this.v0h ^= BBUF[1] ^ BBUF[17];
+    this.v1l ^= BBUF[2] ^ BBUF[18];
+    this.v1h ^= BBUF[3] ^ BBUF[19];
+    this.v2l ^= BBUF[4] ^ BBUF[20];
+    this.v2h ^= BBUF[5] ^ BBUF[21];
+    this.v3l ^= BBUF[6] ^ BBUF[22];
+    this.v3h ^= BBUF[7] ^ BBUF[23];
+    this.v4l ^= BBUF[8] ^ BBUF[24];
+    this.v4h ^= BBUF[9] ^ BBUF[25];
+    this.v5l ^= BBUF[10] ^ BBUF[26];
+    this.v5h ^= BBUF[11] ^ BBUF[27];
+    this.v6l ^= BBUF[12] ^ BBUF[28];
+    this.v6h ^= BBUF[13] ^ BBUF[29];
+    this.v7l ^= BBUF[14] ^ BBUF[30];
+    this.v7h ^= BBUF[15] ^ BBUF[31];
+    BBUF.fill(0);
+  }
+  destroy() {
+    this.destroyed = true;
+    this.buffer32.fill(0);
+    this.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  }
+};
+var blake2b = /* @__PURE__ */ wrapConstructorWithOpts((opts) => new BLAKE2b(opts));
+
+// node_modules/@noble/hashes/esm/argon2.js
+var ARGON2_SYNC_POINTS = 4;
+var toBytesOptional = (buf) => buf !== void 0 ? toBytes(buf) : new Uint8Array([]);
+function mul(a, b) {
+  const aL = a & 65535;
+  const aH = a >>> 16;
+  const bL = b & 65535;
+  const bH = b >>> 16;
+  const ll = Math.imul(aL, bL);
+  const hl = Math.imul(aH, bL);
+  const lh = Math.imul(aL, bH);
+  const hh = Math.imul(aH, bH);
+  const BUF = (ll >>> 16) + (hl & 65535) + lh | 0;
+  const h = (hl >>> 16) + (BUF >>> 16) + hh | 0;
+  return { h, l: BUF << 16 | ll & 65535 };
+}
+function relPos(areaSize, relativePos) {
+  return areaSize - 1 - mul(areaSize, mul(relativePos, relativePos).h).h;
+}
+function mul2(a, b) {
+  const { h, l } = mul(a, b);
+  return { h: (h << 1 | l >>> 31) & 4294967295, l: l << 1 & 4294967295 };
+}
+function blamka(Ah, Al, Bh, Bl) {
+  const { h: Ch, l: Cl } = mul2(Al, Bl);
+  const Rll = add3L(Al, Bl, Cl);
+  return { h: add3H(Rll, Ah, Bh, Ch), l: Rll | 0 };
+}
+var A2_BUF = new Uint32Array(256);
+function G(a, b, c, d) {
+  let Al = A2_BUF[2 * a], Ah = A2_BUF[2 * a + 1];
+  let Bl = A2_BUF[2 * b], Bh = A2_BUF[2 * b + 1];
+  let Cl = A2_BUF[2 * c], Ch = A2_BUF[2 * c + 1];
+  let Dl = A2_BUF[2 * d], Dh = A2_BUF[2 * d + 1];
+  ({ h: Ah, l: Al } = blamka(Ah, Al, Bh, Bl));
+  ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
+  ({ Dh, Dl } = { Dh: rotr32H(Dh, Dl), Dl: rotr32L(Dh, Dl) });
+  ({ h: Ch, l: Cl } = blamka(Ch, Cl, Dh, Dl));
+  ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
+  ({ Bh, Bl } = { Bh: rotrSH(Bh, Bl, 24), Bl: rotrSL(Bh, Bl, 24) });
+  ({ h: Ah, l: Al } = blamka(Ah, Al, Bh, Bl));
+  ({ Dh, Dl } = { Dh: Dh ^ Ah, Dl: Dl ^ Al });
+  ({ Dh, Dl } = { Dh: rotrSH(Dh, Dl, 16), Dl: rotrSL(Dh, Dl, 16) });
+  ({ h: Ch, l: Cl } = blamka(Ch, Cl, Dh, Dl));
+  ({ Bh, Bl } = { Bh: Bh ^ Ch, Bl: Bl ^ Cl });
+  ({ Bh, Bl } = { Bh: rotrBH(Bh, Bl, 63), Bl: rotrBL(Bh, Bl, 63) });
+  A2_BUF[2 * a] = Al, A2_BUF[2 * a + 1] = Ah;
+  A2_BUF[2 * b] = Bl, A2_BUF[2 * b + 1] = Bh;
+  A2_BUF[2 * c] = Cl, A2_BUF[2 * c + 1] = Ch;
+  A2_BUF[2 * d] = Dl, A2_BUF[2 * d + 1] = Dh;
+}
+function P(v00, v01, v02, v03, v04, v05, v06, v07, v08, v09, v10, v11, v12, v13, v14, v15) {
+  G(v00, v04, v08, v12);
+  G(v01, v05, v09, v13);
+  G(v02, v06, v10, v14);
+  G(v03, v07, v11, v15);
+  G(v00, v05, v10, v15);
+  G(v01, v06, v11, v12);
+  G(v02, v07, v08, v13);
+  G(v03, v04, v09, v14);
+}
+function block(x, xPos, yPos, outPos, needXor) {
+  for (let i = 0; i < 256; i++)
+    A2_BUF[i] = x[xPos + i] ^ x[yPos + i];
+  for (let i = 0; i < 128; i += 16) {
+    P(i, i + 1, i + 2, i + 3, i + 4, i + 5, i + 6, i + 7, i + 8, i + 9, i + 10, i + 11, i + 12, i + 13, i + 14, i + 15);
+  }
+  for (let i = 0; i < 16; i += 2) {
+    P(i, i + 1, i + 16, i + 17, i + 32, i + 33, i + 48, i + 49, i + 64, i + 65, i + 80, i + 81, i + 96, i + 97, i + 112, i + 113);
+  }
+  if (needXor)
+    for (let i = 0; i < 256; i++)
+      x[outPos + i] ^= A2_BUF[i] ^ x[xPos + i] ^ x[yPos + i];
+  else
+    for (let i = 0; i < 256; i++)
+      x[outPos + i] = A2_BUF[i] ^ x[xPos + i] ^ x[yPos + i];
+}
+function Hp(A, dkLen) {
+  const A8 = u8(A);
+  const T = new Uint32Array(1);
+  const T8 = u8(T);
+  T[0] = dkLen;
+  if (dkLen <= 64)
+    return blake2b.create({ dkLen }).update(T8).update(A8).digest();
+  const out = new Uint8Array(dkLen);
+  let V = blake2b.create({}).update(T8).update(A8).digest();
+  let pos = 0;
+  out.set(V.subarray(0, 32));
+  pos += 32;
+  for (; dkLen - pos > 64; pos += 32)
+    out.set((V = blake2b(V)).subarray(0, 32), pos);
+  out.set(blake2b(V, { dkLen: dkLen - pos }), pos);
+  return u32(out);
+}
+function indexAlpha(r, s, laneLen, segmentLen, index, randL, sameLane = false) {
+  let area;
+  if (0 == r) {
+    if (0 == s)
+      area = index - 1;
+    else if (sameLane)
+      area = s * segmentLen + index - 1;
+    else
+      area = s * segmentLen + (index == 0 ? -1 : 0);
+  } else if (sameLane)
+    area = laneLen - segmentLen + index - 1;
+  else
+    area = laneLen - segmentLen + (index == 0 ? -1 : 0);
+  const startPos = r !== 0 && s !== ARGON2_SYNC_POINTS - 1 ? (s + 1) * segmentLen : 0;
+  const rel = relPos(area, randL);
+  return (startPos + rel) % laneLen;
+}
+function argon2Init(type, password, salt, opts) {
+  password = toBytes(password);
+  salt = toBytes(salt);
+  let { p, dkLen, m, t, version, key, personalization, maxmem, onProgress } = {
+    ...opts,
+    version: opts.version || 19,
+    dkLen: opts.dkLen || 32,
+    maxmem: 2 ** 32
+  };
+  number(p);
+  number(dkLen);
+  number(m);
+  number(t);
+  number(version);
+  if (dkLen < 4 || dkLen >= 2 ** 32)
+    throw new Error("Argon2: dkLen should be at least 4 bytes");
+  if (p < 1 || p >= 2 ** 32)
+    throw new Error("Argon2: p (parallelism) should be at least 1");
+  if (t < 1 || t >= 2 ** 32)
+    throw new Error("Argon2: t (iterations) should be at least 1");
+  if (m < 8 * p)
+    throw new Error(`Argon2: memory should be at least 8*p bytes`);
+  if (version !== 16 && version !== 19)
+    throw new Error(`Argon2: unknown version=${version}`);
+  password = toBytes(password);
+  if (password.length < 0 || password.length >= 2 ** 32)
+    throw new Error("Argon2: password should be less than 4 GB");
+  salt = toBytes(salt);
+  if (salt.length < 8)
+    throw new Error("Argon2: salt should be at least 8 bytes");
+  key = toBytesOptional(key);
+  personalization = toBytesOptional(personalization);
+  if (onProgress !== void 0 && typeof onProgress !== "function")
+    throw new Error("progressCb should be function");
+  const lanes = p;
+  const mP = 4 * p * Math.floor(m / (ARGON2_SYNC_POINTS * p));
+  const laneLen = Math.floor(mP / p);
+  const segmentLen = Math.floor(laneLen / ARGON2_SYNC_POINTS);
+  const h = blake2b.create({});
+  const BUF = new Uint32Array(1);
+  const BUF8 = u8(BUF);
+  for (const i of [p, dkLen, m, t, version, type]) {
+    if (i < 0 || i >= 2 ** 32)
+      throw new Error(`Argon2: wrong parameter=${i}, expected uint32`);
+    BUF[0] = i;
+    h.update(BUF8);
+  }
+  for (let i of [password, salt, key, personalization]) {
+    BUF[0] = i.length;
+    h.update(BUF8).update(i);
+  }
+  const H0 = new Uint32Array(18);
+  const H0_8 = u8(H0);
+  h.digestInto(H0_8);
+  const memUsed = mP * 256;
+  if (memUsed < 0 || memUsed >= 2 ** 32 || memUsed > maxmem) {
+    throw new Error(`Argon2: wrong params (memUsed=${memUsed} maxmem=${maxmem}), should be less than 2**32`);
+  }
+  const B = new Uint32Array(memUsed);
+  for (let l = 0; l < p; l++) {
+    const i = 256 * laneLen * l;
+    H0[17] = l;
+    H0[16] = 0;
+    B.set(Hp(H0, 1024), i);
+    H0[16] = 1;
+    B.set(Hp(H0, 1024), i + 256);
+  }
+  let perBlock = () => {
+  };
+  if (onProgress) {
+    const totalBlock = t * ARGON2_SYNC_POINTS * p * segmentLen;
+    const callbackPer = Math.max(Math.floor(totalBlock / 1e4), 1);
+    let blockCnt = 0;
+    perBlock = () => {
+      blockCnt++;
+      if (onProgress && (!(blockCnt % callbackPer) || blockCnt === totalBlock))
+        onProgress(blockCnt / totalBlock);
+    };
+  }
+  return { type, mP, p, t, version, B, laneLen, lanes, segmentLen, dkLen, perBlock };
+}
+function argon2Output(B, p, laneLen, dkLen) {
+  const B_final = new Uint32Array(256);
+  for (let l = 0; l < p; l++)
+    for (let j = 0; j < 256; j++)
+      B_final[j] ^= B[256 * (laneLen * l + laneLen - 1) + j];
+  return u8(Hp(B_final, dkLen));
+}
+function processBlock(B, address, l, r, s, index, laneLen, segmentLen, lanes, offset, prev, dataIndependent, needXor) {
+  if (offset % laneLen)
+    prev = offset - 1;
+  let randL, randH;
+  if (dataIndependent) {
+    if (index % 128 === 0) {
+      address[256 + 12]++;
+      block(address, 256, 2 * 256, 0, false);
+      block(address, 0, 2 * 256, 0, false);
+    }
+    randL = address[2 * (index % 128)];
+    randH = address[2 * (index % 128) + 1];
+  } else {
+    const T = 256 * prev;
+    randL = B[T];
+    randH = B[T + 1];
+  }
+  const refLane = r === 0 && s === 0 ? l : randH % lanes;
+  const refPos = indexAlpha(r, s, laneLen, segmentLen, index, randL, refLane == l);
+  const refBlock = laneLen * refLane + refPos;
+  block(B, 256 * prev, 256 * refBlock, offset * 256, needXor);
+}
+function argon2(type, password, salt, opts) {
+  const { mP, p, t, version, B, laneLen, lanes, segmentLen, dkLen, perBlock } = argon2Init(type, password, salt, opts);
+  const address = new Uint32Array(3 * 256);
+  address[256 + 6] = mP;
+  address[256 + 8] = t;
+  address[256 + 10] = type;
+  for (let r = 0; r < t; r++) {
+    const needXor = r !== 0 && version === 19;
+    address[256 + 0] = r;
+    for (let s = 0; s < ARGON2_SYNC_POINTS; s++) {
+      address[256 + 4] = s;
+      const dataIndependent = type == 1 || type == 2 && r === 0 && s < 2;
+      for (let l = 0; l < p; l++) {
+        address[256 + 2] = l;
+        address[256 + 12] = 0;
+        let startPos = 0;
+        if (r === 0 && s === 0) {
+          startPos = 2;
+          if (dataIndependent) {
+            address[256 + 12]++;
+            block(address, 256, 2 * 256, 0, false);
+            block(address, 0, 2 * 256, 0, false);
+          }
+        }
+        let offset = l * laneLen + s * segmentLen + startPos;
+        let prev = offset % laneLen ? offset - 1 : offset + laneLen - 1;
+        for (let index = startPos; index < segmentLen; index++, offset++, prev++) {
+          perBlock();
+          processBlock(B, address, l, r, s, index, laneLen, segmentLen, lanes, offset, prev, dataIndependent, needXor);
+        }
+      }
+    }
+  }
+  return argon2Output(B, p, laneLen, dkLen);
+}
+var argon2id = (password, salt, opts) => argon2(2, password, salt, opts);
+
 // src/crypto.ts
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
+var DEFAULT_KDF = "argon2id";
+var LEGACY_KDF = "pbkdf2";
 var PBKDF2_ITERATIONS = 6e5;
 var LEGACY_PBKDF2_ITERATIONS = 2e5;
+var ARGON2ID_MEMORY_KIB = 19456;
+var ARGON2ID_TIME = 2;
+var ARGON2ID_PARALLELISM = 1;
 var IV_BYTES = 12;
 var KEY_BYTES = 32;
 var SALT_BYTES = 16;
@@ -4210,17 +5083,31 @@ function zeroKeyMaterial(bytes2) {
 function makeKeySalt() {
   return randomHex(SALT_BYTES);
 }
-async function deriveKek(passcode, saltHex, iterations) {
-  const material = await subtle().importKey(
-    "raw",
-    encoder.encode(passcode.trim()),
-    "PBKDF2",
-    false,
-    ["deriveKey"]
+async function deriveKekBytes(passcode, saltHex, kdf, iterations) {
+  const secret = encoder.encode(passcode.trim());
+  if (kdf === "argon2id") {
+    return argon2id(secret, hexToBytes(saltHex), {
+      t: ARGON2ID_TIME,
+      m: ARGON2ID_MEMORY_KIB,
+      p: ARGON2ID_PARALLELISM
+    });
+  }
+  const material = await subtle().importKey("raw", secret, "PBKDF2", false, [
+    "deriveBits"
+  ]);
+  return new Uint8Array(
+    await subtle().deriveBits(
+      { name: "PBKDF2", salt: hexToBytes(saltHex), iterations, hash: "SHA-256" },
+      material,
+      256
+    )
   );
-  return subtle().deriveKey(
-    { name: "PBKDF2", salt: hexToBytes(saltHex), iterations, hash: "SHA-256" },
-    material,
+}
+async function deriveKek(passcode, saltHex, kdf, iterations) {
+  const bytes2 = await deriveKekBytes(passcode, saltHex, kdf, iterations);
+  return subtle().importKey(
+    "raw",
+    bytes2,
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt", "decrypt"]
@@ -4255,9 +5142,9 @@ async function cipherFromRawKey(raw) {
     }
   };
 }
-async function createWrappedVaultKey(passcode, iterations = PBKDF2_ITERATIONS) {
+async function createWrappedVaultKey(passcode, iterations = PBKDF2_ITERATIONS, kdf = DEFAULT_KDF) {
   const keySalt = makeKeySalt();
-  const kek = await deriveKek(passcode, keySalt, iterations);
+  const kek = await deriveKek(passcode, keySalt, kdf, iterations);
   const vk = window.crypto.getRandomValues(new Uint8Array(KEY_BYTES));
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const wrapped = new Uint8Array(
@@ -4272,8 +5159,8 @@ async function createWrappedVaultKey(passcode, iterations = PBKDF2_ITERATIONS) {
     cipher: await cipherFromRawKey(vk)
   };
 }
-async function openWrappedVaultKey(passcode, keySalt, wrappedKey, iterations = PBKDF2_ITERATIONS) {
-  const kek = await deriveKek(passcode, keySalt, iterations);
+async function openWrappedVaultKey(passcode, keySalt, wrappedKey, iterations = PBKDF2_ITERATIONS, kdf = DEFAULT_KDF) {
+  const kek = await deriveKek(passcode, keySalt, kdf, iterations);
   const bundle = fromB64(wrappedKey);
   const iv = bundle.subarray(0, IV_BYTES);
   const wrapped = bundle.subarray(IV_BYTES);
@@ -4283,9 +5170,9 @@ async function openWrappedVaultKey(passcode, keySalt, wrappedKey, iterations = P
   if (vk.length !== KEY_BYTES) throw new Error("vault key has wrong length");
   return cipherFromRawKey(vk);
 }
-async function rewrapRawVaultKey(rawKey, newPasscode, iterations = PBKDF2_ITERATIONS) {
+async function rewrapRawVaultKey(rawKey, newPasscode, iterations = PBKDF2_ITERATIONS, kdf = DEFAULT_KDF) {
   const keySalt = makeKeySalt();
-  const kek = await deriveKek(newPasscode, keySalt, iterations);
+  const kek = await deriveKek(newPasscode, keySalt, kdf, iterations);
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const wrapped = new Uint8Array(
     await subtle().encrypt({ name: "AES-GCM", iv }, kek, rawKey)
@@ -4295,8 +5182,8 @@ async function rewrapRawVaultKey(rawKey, newPasscode, iterations = PBKDF2_ITERAT
   bundle.set(wrapped, iv.length);
   return { keySalt, wrappedKey: toB64(bundle) };
 }
-async function unwrapRawVaultKey(passcode, keySalt, wrappedKey, iterations = PBKDF2_ITERATIONS) {
-  const kek = await deriveKek(passcode, keySalt, iterations);
+async function unwrapRawVaultKey(passcode, keySalt, wrappedKey, iterations = PBKDF2_ITERATIONS, kdf = DEFAULT_KDF) {
+  const kek = await deriveKek(passcode, keySalt, kdf, iterations);
   const bundle = fromB64(wrappedKey);
   const vk = new Uint8Array(
     await subtle().decrypt(
@@ -4443,6 +5330,7 @@ var DEFAULT_SETTINGS = {
   keySalt: "",
   wrappedKey: "",
   kdfIterations: LEGACY_PBKDF2_ITERATIONS,
+  kdf: LEGACY_KDF,
   authMode: "passcode",
   om2: { enabled: false, relayUrl: "", handle: "" }
 };
@@ -4585,6 +5473,7 @@ function sanitizeSettings(raw) {
     5e6,
     LEGACY_PBKDF2_ITERATIONS
   );
+  const kdf = r.kdf === "argon2id" ? "argon2id" : LEGACY_KDF;
   const authMode = encryptMail && r.authMode === "key" && passcodeHash === "" ? "key" : "passcode";
   return {
     address,
@@ -4649,6 +5538,7 @@ function sanitizeSettings(raw) {
     keySalt: encryptMail ? keySalt : "",
     wrappedKey: encryptMail ? wrappedKey : "",
     kdfIterations: encryptMail ? kdfIterations : LEGACY_PBKDF2_ITERATIONS,
+    kdf: encryptMail ? kdf : LEGACY_KDF,
     authMode: encryptMail ? authMode : "passcode",
     // remembered detached-window geometry (UI polish): finite integers in a
     // generous range — negative coordinates are legitimate on multi-monitor
@@ -4935,68 +5825,13 @@ function suggestAddress(picked, taken) {
 // src/om2/crypto/keys.ts
 var import_tweetnacl = __toESM(require_nacl_fast());
 
-// node_modules/@noble/hashes/esm/_assert.js
-function isBytes(a) {
-  return a instanceof Uint8Array || a != null && typeof a === "object" && a.constructor.name === "Uint8Array";
-}
-function bytes(b, ...lengths) {
-  if (!isBytes(b))
-    throw new Error("Uint8Array expected");
-  if (lengths.length > 0 && !lengths.includes(b.length))
-    throw new Error(`Uint8Array expected of length ${lengths}, not of length=${b.length}`);
-}
-function exists(instance, checkFinished = true) {
-  if (instance.destroyed)
-    throw new Error("Hash instance has been destroyed");
-  if (checkFinished && instance.finished)
-    throw new Error("Hash#digest() has already been called");
-}
-function output(out, instance) {
-  bytes(out);
-  const min = instance.outputLen;
-  if (out.length < min) {
-    throw new Error(`digestInto() expects output buffer of length at least ${min}`);
-  }
-}
-
-// node_modules/@noble/hashes/esm/utils.js
-var createView = (arr) => new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
-var rotr2 = (word, shift) => word << 32 - shift | word >>> shift;
-var isLE = new Uint8Array(new Uint32Array([287454020]).buffer)[0] === 68;
-function utf8ToBytes(str) {
-  if (typeof str !== "string")
-    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
-  return new Uint8Array(new TextEncoder().encode(str));
-}
-function toBytes(data) {
-  if (typeof data === "string")
-    data = utf8ToBytes(data);
-  bytes(data);
-  return data;
-}
-var Hash = class {
-  // Safe version that clones internal state
-  clone() {
-    return this._cloneInto();
-  }
-};
-var toStr = {}.toString;
-function wrapConstructor(hashCons) {
-  const hashC = (msg) => hashCons().update(toBytes(msg)).digest();
-  const tmp = hashCons();
-  hashC.outputLen = tmp.outputLen;
-  hashC.blockLen = tmp.blockLen;
-  hashC.create = () => hashCons();
-  return hashC;
-}
-
 // node_modules/@noble/hashes/esm/_md.js
 function setBigUint64(view, byteOffset, value, isLE2) {
   if (typeof view.setBigUint64 === "function")
     return view.setBigUint64(byteOffset, value, isLE2);
-  const _32n = BigInt(32);
+  const _32n2 = BigInt(32);
   const _u32_max = BigInt(4294967295);
-  const wh = Number(value >> _32n & _u32_max);
+  const wh = Number(value >> _32n2 & _u32_max);
   const wl = Number(value & _u32_max);
   const h = isLE2 ? 4 : 0;
   const l = isLE2 ? 0 : 4;
@@ -5183,18 +6018,18 @@ var SHA256 = class extends HashMD {
     this.H = SHA256_IV[7] | 0;
   }
   get() {
-    const { A, B, C, D, E, F, G, H } = this;
-    return [A, B, C, D, E, F, G, H];
+    const { A, B, C, D, E, F, G: G2, H } = this;
+    return [A, B, C, D, E, F, G2, H];
   }
   // prettier-ignore
-  set(A, B, C, D, E, F, G, H) {
+  set(A, B, C, D, E, F, G2, H) {
     this.A = A | 0;
     this.B = B | 0;
     this.C = C | 0;
     this.D = D | 0;
     this.E = E | 0;
     this.F = F | 0;
-    this.G = G | 0;
+    this.G = G2 | 0;
     this.H = H | 0;
   }
   process(view, offset) {
@@ -5207,14 +6042,14 @@ var SHA256 = class extends HashMD {
       const s1 = rotr2(W2, 17) ^ rotr2(W2, 19) ^ W2 >>> 10;
       SHA256_W[i] = s1 + SHA256_W[i - 7] + s0 + SHA256_W[i - 16] | 0;
     }
-    let { A, B, C, D, E, F, G, H } = this;
+    let { A, B, C, D, E, F, G: G2, H } = this;
     for (let i = 0; i < 64; i++) {
       const sigma1 = rotr2(E, 6) ^ rotr2(E, 11) ^ rotr2(E, 25);
-      const T1 = H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i] | 0;
+      const T1 = H + sigma1 + Chi(E, F, G2) + SHA256_K[i] + SHA256_W[i] | 0;
       const sigma0 = rotr2(A, 2) ^ rotr2(A, 13) ^ rotr2(A, 22);
       const T2 = sigma0 + Maj(A, B, C) | 0;
-      H = G;
-      G = F;
+      H = G2;
+      G2 = F;
       F = E;
       E = D + T1 | 0;
       D = C;
@@ -5228,9 +6063,9 @@ var SHA256 = class extends HashMD {
     D = D + this.D | 0;
     E = E + this.E | 0;
     F = F + this.F | 0;
-    G = G + this.G | 0;
+    G2 = G2 + this.G | 0;
     H = H + this.H | 0;
-    this.set(A, B, C, D, E, F, G, H);
+    this.set(A, B, C, D, E, F, G2, H);
   }
   roundClean() {
     SHA256_W.fill(0);
@@ -6813,9 +7648,9 @@ var qrcodegen;
       }
       let result = [];
       for (let i = 0; i < blocks[0].length; i++) {
-        blocks.forEach((block, j) => {
+        blocks.forEach((block2, j) => {
           if (i != shortBlockLen - blockEccLen || j >= numShortBlocks)
-            result.push(block[i]);
+            result.push(block2[i]);
         });
       }
       assert(result.length == rawCodewords);
@@ -7824,11 +8659,11 @@ var MessengerSettingTab = class extends import_obsidian6.PluginSettingTab {
         },
         {
           name: "Unlock method",
-          desc: keyMode ? "Vault key \u2014 a 125-bit generated key in your password manager derives the encryption key. Brute-forcing it is out of reach for any attacker holding your files." : "Passcode \u2014 the encryption key is derived from your passcode (PBKDF2, 600k rounds). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key.",
+          desc: keyMode ? "Vault key \u2014 a 125-bit generated key in your password manager derives the encryption key. Brute-forcing it is out of reach for any attacker holding your files." : "Passcode \u2014 the encryption key is derived from your passcode (Argon2id, memory-hard). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key.",
           visible: encrypted,
           render: (setting) => {
             setting.setName("Unlock method").setDesc(
-              keyMode ? "Vault key \u2014 a 125-bit generated key in your password manager derives the encryption key. Brute-forcing it is out of reach for any attacker holding your files." : "Passcode \u2014 the encryption key is derived from your passcode (PBKDF2, 600k rounds). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key."
+              keyMode ? "Vault key \u2014 a 125-bit generated key in your password manager derives the encryption key. Brute-forcing it is out of reach for any attacker holding your files." : "Passcode \u2014 the encryption key is derived from your passcode (Argon2id, memory-hard). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key."
             ).addButton(
               (btn) => btn.setButtonText(keyMode ? "Switch to passcode\u2026" : "Switch to vault key\u2026").onClick(() => {
                 if (keyMode) {
@@ -11963,7 +12798,7 @@ var import_tweetnacl3 = __toESM(require_nacl_fast());
 
 // src/om2/crypto/ed2curve.ts
 var import_tweetnacl2 = __toESM(require_nacl_fast());
-var P = 2n ** 255n - 19n;
+var P2 = 2n ** 255n - 19n;
 function bytesToBigIntLE(bytes2) {
   let x = 0n;
   for (let i = bytes2.length - 1; i >= 0; i--) x = x << 8n | BigInt(bytes2[i]);
@@ -11999,10 +12834,10 @@ function convertSecretKey(edSecretKey) {
 }
 function convertPublicKey(edPublicKey) {
   const y = bytesToBigIntLE(edPublicKey) & (1n << 255n) - 1n;
-  const num = (1n + y) % P;
-  const den = (1n - y + P) % P;
-  const denInv = modPow(den, P - 2n, P);
-  return bigIntToBytesLE(num * denInv % P, 32);
+  const num = (1n + y) % P2;
+  const den = (1n - y + P2) % P2;
+  const denInv = modPow(den, P2 - 2n, P2);
+  return bigIntToBytesLE(num * denInv % P2, 32);
 }
 
 // src/om2/crypto/seal.ts
@@ -12427,20 +13262,20 @@ var Bridge = class {
     if (!this.state) return;
     for (const contact of await this.opts.contacts.all()) {
       const blocks = await this.opts.mail.readInbox(contact.alias);
-      for (const block of blocks) {
-        if (this.state.isSent(block.id)) continue;
-        if (block.from === BOUNCE_FROM) continue;
-        if (block.enc) continue;
-        await this.sendBlock(contact, block);
+      for (const block2 of blocks) {
+        if (this.state.isSent(block2.id)) continue;
+        if (block2.from === BOUNCE_FROM) continue;
+        if (block2.enc) continue;
+        await this.sendBlock(contact, block2);
       }
     }
   }
-  async sendBlock(contact, block) {
+  async sendBlock(contact, block2) {
     if (!this.state) return;
     const wire = {
-      id: block.id,
-      ts: block.ts,
-      replyTo: block.replyTo,
+      id: block2.id,
+      ts: block2.ts,
+      replyTo: block2.replyTo,
       from: {
         fp: this.myFp,
         handle: this.opts.handle,
@@ -12452,7 +13287,7 @@ var Bridge = class {
         relay: this.opts.relayUrl
       },
       to: contact.fp,
-      body: block.body,
+      body: block2.body,
       sig: ""
     };
     wire.sig = toB642(
@@ -12485,19 +13320,19 @@ var Bridge = class {
       }
     }
     if (delivered) {
-      this.state.markSent(block.id);
-      this.state.clearAttempt(block.id);
-      this.log(`sent ${block.id} \u2192 ${contact.alias}`);
+      this.state.markSent(block2.id);
+      this.state.clearAttempt(block2.id);
+      this.log(`sent ${block2.id} \u2192 ${contact.alias}`);
       return;
     }
-    const attempts = this.state.attemptFailed(block.id, lastErr);
-    this.log(`send failed for ${block.id} (attempt ${attempts}): ${lastErr}`);
+    const attempts = this.state.attemptFailed(block2.id, lastErr);
+    this.log(`send failed for ${block2.id} (attempt ${attempts}): ${lastErr}`);
     if (attempts >= this.maxSendAttempts) {
       const reason = noRelayOnFile ? "no relay on file for this contact (an older client may have omitted it) \u2014 your own relay was tried as a fallback, but they never poll it. Ask them to re-share their invite code." : lastErr;
-      await this.bounce(block, contact, reason);
-      this.state.markSent(block.id);
-      this.state.clearAttempt(block.id);
-      this.onEvent({ type: "bounce", id: block.id, alias: contact.alias, reason });
+      await this.bounce(block2, contact, reason);
+      this.state.markSent(block2.id);
+      this.state.clearAttempt(block2.id);
+      this.onEvent({ type: "bounce", id: block2.id, alias: contact.alias, reason });
     }
   }
   async postOutbox(relayUrl, toFp, box) {
@@ -12510,14 +13345,14 @@ var Bridge = class {
     });
     return res.status === 201;
   }
-  async bounce(block, contact, reason) {
-    await this.opts.mail.appendMessage(block.from, {
+  async bounce(block2, contact, reason) {
+    await this.opts.mail.appendMessage(block2.from, {
       id: newMessageId(),
       from: BOUNCE_FROM,
-      to: block.from,
+      to: block2.from,
       ts: (/* @__PURE__ */ new Date()).toISOString(),
-      replyTo: block.id,
-      body: `Delivery failed: your message \`${block.id}\` to \`${contact.alias}\` could not be delivered after ${this.maxSendAttempts} attempts.
+      replyTo: block2.id,
+      body: `Delivery failed: your message \`${block2.id}\` to \`${contact.alias}\` could not be delivered after ${this.maxSendAttempts} attempts.
 
 Reason: ${reason}
 
@@ -12736,18 +13571,18 @@ function jitter(ms) {
 // src/om2/identity-store.ts
 var import_tweetnacl5 = __toESM(require_nacl_fast());
 var IDENTITY_KEY = "identity.json";
-async function createIdentityRecord(passcode, iterations = PBKDF2_ITERATIONS) {
+async function createIdentityRecord(passcode, iterations = PBKDF2_ITERATIONS, kdf = DEFAULT_KDF) {
   const seed = import_tweetnacl5.default.randomBytes(32);
   const identity = identityFromSeed(seed);
   zeroKeyMaterial(seed);
-  const bundle = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), passcode, iterations);
+  const bundle = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), passcode, iterations, kdf);
   return {
-    record: { version: 1, keySalt: bundle.keySalt, wrappedKey: bundle.wrappedKey, publicKey: toB64u(identity.publicKey) },
+    record: { version: 1, keySalt: bundle.keySalt, wrappedKey: bundle.wrappedKey, publicKey: toB64u(identity.publicKey), kdf },
     identity
   };
 }
-async function openIdentityRecord(record, passcode, iterations = PBKDF2_ITERATIONS) {
-  const seed = await unwrapRawVaultKey(passcode, record.keySalt, record.wrappedKey, iterations);
+async function openIdentityRecord(record, passcode, iterations = PBKDF2_ITERATIONS, kdf = record.kdf ?? LEGACY_KDF) {
+  const seed = await unwrapRawVaultKey(passcode, record.keySalt, record.wrappedKey, iterations, kdf);
   const identity = identityFromSeed(seed);
   zeroKeyMaterial(seed);
   if (!identityValid(identity)) {
@@ -13815,7 +14650,8 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         this.unlockSecret(candidate),
         this.settings.keySalt,
         this.settings.wrappedKey,
-        this.settings.kdfIterations
+        this.settings.kdfIterations,
+        this.settings.kdf
       );
     } catch {
       return null;
@@ -13823,7 +14659,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
   }
   /**
    * Verify the unlock secret — the one gate for every sensitive action.
-   * With sealing on, verification IS the unwrap (full PBKDF2 per attempt);
+   * With sealing on, verification IS the unwrap (full KDF run per attempt);
    * without it, the UI-gate hash answers.
    */
   async verifyAuth(candidate) {
@@ -13848,12 +14684,13 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
           `Encryption needs a stronger passcode \u2014 at least 8 characters, not digits-only`
         );
       }
-      const bundle = await createWrappedVaultKey(passcode, PBKDF2_ITERATIONS);
+      const bundle = await createWrappedVaultKey(passcode);
       this.settings.passcodeHash = "";
       this.settings.passcodeSalt = "";
       this.settings.keySalt = bundle.keySalt;
       this.settings.wrappedKey = bundle.wrappedKey;
       this.settings.kdfIterations = PBKDF2_ITERATIONS;
+      this.settings.kdf = DEFAULT_KDF;
       this.settings.authMode = "passcode";
       this.settings.encryptMail = true;
       this.applyCipher(bundle.cipher);
@@ -13878,13 +14715,15 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
           this.unlockSecret(current),
           this.settings.keySalt,
           this.settings.wrappedKey,
-          this.settings.kdfIterations
+          this.settings.kdfIterations,
+          this.settings.kdf
         );
-        const bundle = await rewrapRawVaultKey(raw, next, PBKDF2_ITERATIONS);
+        const bundle = await rewrapRawVaultKey(raw, next);
         zeroKeyMaterial(raw);
         this.settings.keySalt = bundle.keySalt;
         this.settings.wrappedKey = bundle.wrappedKey;
         this.settings.kdfIterations = PBKDF2_ITERATIONS;
+        this.settings.kdf = DEFAULT_KDF;
         this.settings.authMode = "passcode";
         this.settings.passcodeHash = "";
         this.settings.passcodeSalt = "";
@@ -13903,11 +14742,12 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     if (om2Record) {
       try {
         const identity = await openIdentityRecord(om2Record, this.unlockSecret(current));
-        const rebundled = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), next, PBKDF2_ITERATIONS);
+        const rebundled = await rewrapRawVaultKey(identity.secretKey.slice(0, 32), next);
         await saveIdentityRecord(this.om2Kv, {
           ...om2Record,
           keySalt: rebundled.keySalt,
-          wrappedKey: rebundled.wrappedKey
+          wrappedKey: rebundled.wrappedKey,
+          kdf: DEFAULT_KDF
         });
       } catch (err) {
         console.error("[message-bus] om2 identity re-wrap failed", err);
@@ -13930,12 +14770,13 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
       );
     }
     if (!webcryptoAvailable()) throw new Error("WebCrypto unavailable here");
-    const bundle = await createWrappedVaultKey(passcode, PBKDF2_ITERATIONS);
+    const bundle = await createWrappedVaultKey(passcode);
     this.applyCipher(bundle.cipher);
     const { messages } = await this.store.rewriteAll(true);
     this.settings.keySalt = bundle.keySalt;
     this.settings.wrappedKey = bundle.wrappedKey;
     this.settings.kdfIterations = PBKDF2_ITERATIONS;
+    this.settings.kdf = DEFAULT_KDF;
     this.settings.authMode = "passcode";
     this.settings.passcodeHash = "";
     this.settings.passcodeSalt = "";
@@ -13954,12 +14795,13 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     if (!webcryptoAvailable()) throw new Error("WebCrypto unavailable here");
     if (this.hasKeyBundle()) throw new Error("Encryption is already on");
     if (!normalizeVaultKey(key)) throw new Error("Malformed vault key");
-    const bundle = await createWrappedVaultKey(key, PBKDF2_ITERATIONS);
+    const bundle = await createWrappedVaultKey(key);
     this.applyCipher(bundle.cipher);
     const { messages } = await this.store.rewriteAll(true);
     this.settings.keySalt = bundle.keySalt;
     this.settings.wrappedKey = bundle.wrappedKey;
     this.settings.kdfIterations = PBKDF2_ITERATIONS;
+    this.settings.kdf = DEFAULT_KDF;
     this.settings.authMode = "key";
     this.settings.passcodeHash = "";
     this.settings.passcodeSalt = "";
@@ -13981,16 +14823,18 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         this.unlockSecret(currentSecret),
         this.settings.keySalt,
         this.settings.wrappedKey,
-        this.settings.kdfIterations
+        this.settings.kdfIterations,
+        this.settings.kdf
       );
     } catch {
       throw new Error("Wrong passcode or key");
     }
-    const bundle = await rewrapRawVaultKey(raw, key, PBKDF2_ITERATIONS);
+    const bundle = await rewrapRawVaultKey(raw, key);
     zeroKeyMaterial(raw);
     this.settings.keySalt = bundle.keySalt;
     this.settings.wrappedKey = bundle.wrappedKey;
     this.settings.kdfIterations = PBKDF2_ITERATIONS;
+    this.settings.kdf = DEFAULT_KDF;
     this.settings.authMode = "key";
     this.settings.passcodeHash = "";
     this.settings.passcodeSalt = "";
@@ -14011,6 +14855,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     this.settings.keySalt = "";
     this.settings.wrappedKey = "";
     this.settings.kdfIterations = LEGACY_PBKDF2_ITERATIONS;
+    this.settings.kdf = LEGACY_KDF;
     const wasKeyMode = this.settings.authMode === "key";
     this.settings.authMode = "passcode";
     if (!wasKeyMode && !this.settings.passcodeHash) {
@@ -14109,7 +14954,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
   }
   /**
    * Try the unlock secret against one conversation's lock. True when it
-   * opened. Async: with sealing on, each attempt is a full PBKDF2 unwrap.
+   * opened. Async: with sealing on, each attempt is a full KDF unwrap.
    */
   async tryUnlockPeer(peer, candidate) {
     if (!await this.verifyAuth(candidate)) return false;

@@ -3,7 +3,7 @@ import { ADDRESS_RE, MAX_BAR_SECONDS } from "./mailbox/envelope";
 import type { MailEnvelope } from "./mailbox/envelope";
 import type { UnackedSend } from "./retransmit";
 import { WALLPAPERS } from "./appearance/wallpaper";
-import { LEGACY_PBKDF2_ITERATIONS } from "./crypto";
+import { LEGACY_KDF, LEGACY_PBKDF2_ITERATIONS, type KdfId } from "./crypto";
 
 export interface MessengerSettings {
   /** This participant's own address. */
@@ -96,12 +96,14 @@ export interface MessengerSettings {
   lockedPeers: Record<string, boolean>;
   /** Seal message bodies at rest (SPEC §15). Requires a passcode or vault key. */
   encryptMail: boolean;
-  /** PBKDF2 salt for the vault-key KEK (32 hex chars). */
+  /** KDF salt for the vault-key KEK (32 hex chars). */
   keySalt: string;
   /** The vault key, wrapped by the KEK from the unlock secret (base64 iv+ct). */
   wrappedKey: string;
-  /** PBKDF2 rounds the wrappedKey was sealed with (absent = legacy 200k). */
+  /** PBKDF2 rounds the wrappedKey was sealed with (absent = legacy 200k; only read when kdf is "pbkdf2"). */
   kdfIterations: number;
+  /** KDF the wrappedKey was sealed with (absent in old data.json = pbkdf2 era). */
+  kdf: KdfId;
   /** What unlocks the vault key: a memorized passcode or a generated key. */
   authMode: "passcode" | "key";
   /**
@@ -169,6 +171,7 @@ export const DEFAULT_SETTINGS: MessengerSettings = {
   keySalt: "",
   wrappedKey: "",
   kdfIterations: LEGACY_PBKDF2_ITERATIONS,
+  kdf: LEGACY_KDF,
   authMode: "passcode",
   om2: { enabled: false, relayUrl: "", handle: "" },
 };
@@ -415,6 +418,8 @@ export function sanitizeSettings(raw: unknown): MessengerSettings {
     5_000_000,
     LEGACY_PBKDF2_ITERATIONS
   );
+  // same absence-means-legacy rule for the KDF id itself
+  const kdf: KdfId = r.kdf === "argon2id" ? "argon2id" : LEGACY_KDF;
   const authMode =
     encryptMail && r.authMode === "key" && passcodeHash === "" ? "key" : "passcode";
   return {
@@ -502,6 +507,7 @@ export function sanitizeSettings(raw: unknown): MessengerSettings {
     keySalt: encryptMail ? keySalt : "",
     wrappedKey: encryptMail ? wrappedKey : "",
     kdfIterations: encryptMail ? kdfIterations : LEGACY_PBKDF2_ITERATIONS,
+    kdf: encryptMail ? kdf : LEGACY_KDF,
     authMode: encryptMail ? authMode : "passcode",
     // remembered detached-window geometry (UI polish): finite integers in a
     // generous range — negative coordinates are legitimate on multi-monitor

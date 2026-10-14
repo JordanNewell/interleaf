@@ -406,7 +406,7 @@ export class MessengerSettingTab extends PluginSettingTab {
           name: "Unlock method",
           desc: keyMode
             ? "Vault key — a 125-bit generated key in your password manager derives the encryption key. Brute-forcing it is out of reach for any attacker holding your files."
-            : "Passcode — the encryption key is derived from your passcode (PBKDF2, 600k rounds). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key.",
+            : "Passcode — the encryption key is derived from your passcode (Argon2id, memory-hard). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key.",
           visible: encrypted,
           render: (setting) => {
             setting
@@ -414,7 +414,7 @@ export class MessengerSettingTab extends PluginSettingTab {
               .setDesc(
                 keyMode
                   ? "Vault key — a 125-bit generated key in your password manager derives the encryption key. Brute-forcing it is out of reach for any attacker holding your files."
-                  : "Passcode — the encryption key is derived from your passcode (PBKDF2, 600k rounds). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key."
+                  : "Passcode — the encryption key is derived from your passcode (Argon2id, memory-hard). Its strength sets the real security of a stolen backup: use a long random passphrase, or switch to a generated vault key."
               )
               .addButton((btn) =>
                 btn

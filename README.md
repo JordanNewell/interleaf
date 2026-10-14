@@ -123,7 +123,8 @@ Turn on **Encrypt messages at rest** (or leave the box checked at sign-up)
 and message bodies stop being plain markdown: each body is sealed with
 AES-256-GCM, and the key is a random 256-bit vault key that exists only in
 memory after you unlock — wrapped by a key derived from your unlock secret
-via PBKDF2 (600k rounds) and stored only in wrapped form. Copy the vault,
+via Argon2id (memory-hard; older vaults wrapped with PBKDF2 upgrade on
+their next secret change) and stored only in wrapped form. Copy the vault,
 read the files with anything else, or steal a backup, and you get
 ciphertext.
 
@@ -450,9 +451,15 @@ the relay can never read a message:
   Social, a separate project) decode too.
 - **Honest limits:** remote conversations show no delivery/read receipts
   (SPEC.md §12 — receipts never cross vaults), the relay must be up for mail
-  in flight (7-day retention is the outer bound), and a signature proves key
+  in flight (7-day retention is the outer bound), a signature proves key
   possession, never personhood — compare the 30-digit safety number
-  out-of-band.
+  out-of-band, and sealed boxes are static: there is no ratchet, so a
+  stolen long-term key decrypts that contact's captured traffic (fine for
+  archival mail on devices you control — a different bet from chat apps
+  with forward secrecy, made on purpose). First contact trusts the key the
+  invite carried; an intercepted *first* invite could substitute a key,
+  which is exactly what the safety number catches — the quarantine plus a
+  30-second comparison closes the window.
 
 Verification is built in — no other plugin needed. If Obsidian Social (a
 separate project) happens to be installed in the same vault, disable one of
@@ -477,7 +484,7 @@ anywhere.
 - [x] Chat UX: search (thread + global), mute, export, delete, attachments,
       persisted drafts, portable test suite + CI
 - [x] Security: mandatory passcode, per-conversation locks, encryption at
-      rest (PBKDF2-wrapped vault key, AES-GCM sealed bodies), legacy-hash
+      rest (Argon2id-wrapped vault key, AES-GCM sealed bodies), legacy-hash
       scrub on upgrade
 - [x] Delivery hardening: retransmission with receipts-based ACK (SPEC.md
       §14), burn-after-send/read fields (§16), conflict adoption, per-address
