@@ -522,7 +522,7 @@ Jordan Newell — free to read, audit, and run; not an open-source license.
 - **Beyond that takes a commercial license:** production use of modified
   versions, resale, or offering Interleaf (or any modified version) as part
   of a product or service. Reach Jordan Newell via the
-  [discussions](https://github.com/JordanNewell/message-bus/discussions).
+  [discussions](https://github.com/JordanNewell/interleaf/discussions).
 - Four years after a version is first publicly distributed, that version
   converts to GPL-3.0 — copyleft, never a permissive license like MIT or
   Apache.
