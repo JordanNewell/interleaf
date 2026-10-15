@@ -155,7 +155,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
     this.contacts = new ContactsStore(this.app.vault.adapter, root);
     this.bus = new MailBus(this.store, {
       onError: (err, address) => {
-        console.error(`[message-bus] handler error (${address})`, err);
+        console.error(`[interleaf] handler error (${address})`, err);
         if (this.settings.debug) {
           new Notice(`Messenger: handler error in ${address} — see console`);
         }
@@ -256,6 +256,10 @@ export default class ObsidianMessengerPlugin extends Plugin {
     // Bridge state + the wrapped identity live under the plugin's own dir —
     // never the mailbox root, where GC and migration treat files as mail.
     this.om2Kv = adapterKv(this.app.vault.adapter, `${this.manifest.dir}/om2`);
+    this.registerObsidianProtocolHandler("interleaf-invite", (params) => {
+      void this.handleInviteCode(String(params.code ?? ""));
+    });
+    // pre-rename deep links already scanned/printed keep working
     this.registerObsidianProtocolHandler("message-bus-invite", (params) => {
       void this.handleInviteCode(String(params.code ?? ""));
     });
@@ -485,7 +489,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
         );
       }
     } catch (err) {
-      console.error("[message-bus] pump failed", err);
+      console.error("[interleaf] pump failed", err);
     }
   }
 
@@ -514,7 +518,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
         await this.store.adoptConflicts(address);
       }
     } catch (err) {
-      console.error("[message-bus] conflict adoption failed", err);
+      console.error("[interleaf] conflict adoption failed", err);
     }
   }
 
@@ -560,7 +564,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
             void this.updateBadge();
           }
         } catch (err) {
-          console.error("[message-bus] burn sweep failed", err);
+          console.error("[interleaf] burn sweep failed", err);
           break; // don't hammer a failing disk — the next pass decides again
         }
       } while (this.burnSweepQueued);
@@ -620,7 +624,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
           receipts = parseReceipts(await this.store.readReceiptsRaw(entry.message.to));
         }
       } catch (err) {
-        console.error("[message-bus] receipt check failed", err);
+        console.error("[interleaf] receipt check failed", err);
         continue; // unreadable this pass — decide again next sweep
       }
       switch (planRetransmit(entry, hasReceiptsFile, receipts, now)) {
@@ -635,7 +639,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
           try {
             await this.store.append(entry.message.to, entry.message);
           } catch (err) {
-            console.error("[message-bus] retransmit failed", err);
+            console.error("[interleaf] retransmit failed", err);
             continue;
           }
           entry.attempts += 1;
@@ -740,7 +744,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
       // fall back to a normal leaf and remember why for diagnostics
       this.lastPopoutError = String((err as Error)?.message ?? err);
       console.warn(
-        "[message-bus] popout failed, opening in-app:",
+        "[interleaf] popout failed, opening in-app:",
         this.lastPopoutError
       );
       return this.openChat(peer);
@@ -849,7 +853,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
         )
       );
     } catch (err) {
-      console.error("[message-bus] delivery receipt failed", err);
+      console.error("[interleaf] delivery receipt failed", err);
       // keep the debt and retry later: a lost ✓ would make the sender
       // retransmit (§14) mail the recipient already holds
       for (const id of ids) this.pendingDelivered.add(id);
@@ -1099,7 +1103,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
       try {
         await this.om2Bridge.accept(entry.fp);
       } catch (err) {
-        console.error("[message-bus] om2 accept failed", err);
+        console.error("[interleaf] om2 accept failed", err);
         new Notice(`Messenger: accept failed — ${err instanceof Error ? err.message : "unknown error"}`);
         return;
       }
@@ -1121,7 +1125,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
       try {
         await this.om2Bridge.decline(entry.fp);
       } catch (err) {
-        console.error("[message-bus] om2 decline failed", err);
+        console.error("[interleaf] om2 decline failed", err);
       }
     }
     if (entry) await this.contacts.setState(address, "blocked");
@@ -1351,7 +1355,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
         this.settings.passcodeHash = "";
         this.settings.passcodeSalt = "";
       } catch (err) {
-        console.error("[message-bus] key re-wrap failed", err);
+        console.error("[interleaf] key re-wrap failed", err);
         return false;
       }
       await this.saveSettings();
@@ -1375,7 +1379,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
           kdf: DEFAULT_KDF,
         });
       } catch (err) {
-        console.error("[message-bus] om2 identity re-wrap failed", err);
+        console.error("[interleaf] om2 identity re-wrap failed", err);
       }
     }
     await this.saveSettings();
@@ -1548,6 +1552,28 @@ export default class ObsidianMessengerPlugin extends Plugin {
         this.settings.passcodeSalt = "";
         await this.saveSettings();
       }
+      // pre-Argon2id vault: upgrade the wrap silently on first unlock —
+      // one-time, invisible unless it fails, and a failure costs only the
+      // upgrade, never the unlock (the next session tries again)
+      if (this.settings.kdf === LEGACY_KDF) {
+        try {
+          const raw = await unwrapRawVaultKey(
+            this.unlockSecret(candidate),
+            this.settings.keySalt,
+            this.settings.wrappedKey,
+            this.settings.kdfIterations,
+            LEGACY_KDF
+          );
+          const bundle = await rewrapRawVaultKey(raw, this.unlockSecret(candidate));
+          this.settings.keySalt = bundle.keySalt;
+          this.settings.wrappedKey = bundle.wrappedKey;
+          this.settings.kdfIterations = PBKDF2_ITERATIONS;
+          this.settings.kdf = DEFAULT_KDF;
+          await this.saveSettings();
+        } catch (err) {
+          console.error("[interleaf] silent KDF re-wrap failed", err);
+        }
+      }
     } else if (!this.verifyPasscodeHash(candidate)) {
       return false;
     }
@@ -1558,7 +1584,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
     try {
       await this.unlockOm2(candidate);
     } catch (err) {
-      console.error("[message-bus] om2 identity unlock failed", err);
+      console.error("[interleaf] om2 identity unlock failed", err);
     }
     // every view showing a lock screen follows — sidebar and popouts alike
     this.refreshChatViews();
@@ -1647,7 +1673,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
       contacts: this.om2Book,
       relayUrl: this.settings.om2.relayUrl,
       log: (msg) => {
-        if (this.settings.debug) console.info(`[message-bus/om2] ${msg}`);
+        if (this.settings.debug) console.info(`[interleaf/om2] ${msg}`);
       },
       onEvent: (ev) => this.onOm2Event(ev),
     });
@@ -1666,7 +1692,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
     } catch (err) {
       // the secret just verified against the vault key, so this is corruption
       // — leave cross-vault mail off rather than loop the user into a modal
-      console.error("[message-bus] om2 identity unwrapping failed", err);
+      console.error("[interleaf] om2 identity unwrapping failed", err);
       new Notice("Messenger: the cross-vault identity is unreadable — regenerate it in settings", 10_000);
       return;
     }
@@ -1677,7 +1703,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
   async stopOm2(): Promise<void> {
     const bridge = this.om2Bridge;
     this.om2Bridge = null;
-    if (bridge) await bridge.stop().catch((err) => console.error("[message-bus] om2 stop failed", err));
+    if (bridge) await bridge.stop().catch((err) => console.error("[interleaf] om2 stop failed", err));
     wipeIdentity(this.om2Identity);
     this.om2Identity = null;
   }
@@ -1846,7 +1872,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
         await this.createOm2Identity(passcode);
         new Notice("Messenger: cross-vault mail is on — your invite lives in settings", 8_000);
       } catch (err) {
-        console.error("[message-bus] om2 onboarding setup failed", err);
+        console.error("[interleaf] om2 onboarding setup failed", err);
         new Notice("Messenger: cross-vault mail setup failed — enable it later in settings");
         this.settings.om2.enabled = false;
       }
@@ -1884,7 +1910,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
       paragraphs.push("Try *Send message* from the command palette, or just type below.");
       await this.bus.send(BUS_ADDRESS, address, paragraphs.join("\n"));
     } catch (err) {
-      console.warn("[message-bus] welcome message failed", err);
+      console.warn("[interleaf] welcome message failed", err);
     }
     await this.openChat(BUS_ADDRESS);
   }
@@ -1980,7 +2006,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
           encodeReceiptBlock(me, "read", next, unreadIds)
         );
       } catch (err) {
-        console.error("[message-bus] read receipt failed", err);
+        console.error("[interleaf] read receipt failed", err);
       }
     }
     await this.saveSettings();

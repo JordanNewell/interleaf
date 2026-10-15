@@ -62,5 +62,11 @@ export function convertPublicKey(edPublicKey: Uint8Array): Uint8Array {
   const num = (1n + y) % P;
   const den = (1n - y + P) % P;
   const denInv = modPow(den, P - 2n, P);
-  return bigIntToBytesLE((num * denInv) % P, 32);
+  const out = bigIntToBytesLE((num * denInv) % P, 32);
+  // u = 0 is the Montgomery image of y = ±1 — non-canonical Ed25519 encodings
+  // on the small-order point. X25519 against it collapses every shared secret
+  // to all zeros, so a box built with it can never work: reject at the door
+  // instead of letting the failure surface as an undecryptable message.
+  if (out.every((b) => b === 0)) throw new Error("ed2curve: small-order point (u = 0)");
+  return out;
 }

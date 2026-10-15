@@ -136,3 +136,76 @@ describe("om2 sealed boxes", () => {
     assert.equal(openJson(bob.secretKey, { box: short }), null);
   });
 });
+
+describe("om2 ed2curve", () => {
+  // Independent cross-check: our hand-rolled RFC 7748 §4.1 conversion must
+  // agree with @noble/curves (a separate audited implementation) in both
+  // directions, on random keys and on the RFC 8032 known-answer key.
+  test("convertPublicKey/convertSecretKey agree with @noble/curves", async () => {
+    const { ed25519 } = await import("@noble/curves/ed25519.js");
+    const seeds = [
+      nacl.randomBytes(32),
+      nacl.randomBytes(32),
+      // RFC 8032 §7.1 TEST 1 — Ed25519 side is a published known-answer;
+      // the Montgomery halves below are whatever the two implementations
+      // independently agree they convert to.
+      Buffer.from(
+        "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+        "hex"
+      ),
+    ];
+    for (const seed of seeds) {
+      const pub = ed25519.getPublicKey(seed);
+      assert.deepEqual(
+        Buffer.from(pub).toString("hex"),
+        Buffer.from(nacl.sign.keyPair.fromSeed(seed).publicKey).toString("hex")
+      );
+      assert.deepEqual(
+        Buffer.from(convertPublicKey(pub)).toString("hex"),
+        Buffer.from(ed25519.utils.toMontgomery(pub)).toString("hex")
+      );
+      assert.deepEqual(
+        Buffer.from(convertSecretKey(seed)).toString("hex"),
+        Buffer.from(ed25519.utils.toMontgomerySecret(seed)).toString("hex")
+      );
+    }
+  });
+
+  test("converted keys perform working X25519 against noble's", async () => {
+    const { ed25519, x25519 } = await import("@noble/curves/ed25519.js");
+    const alice = nacl.sign.keyPair();
+    const bob = nacl.sign.keyPair();
+    const seed = (kp: Uint8Array) => kp.subarray(0, 32);
+    // ours: converted keys through tweetnacl's scalar mult
+    const ours = nacl.scalarMult(
+      convertSecretKey(seed(alice.secretKey)),
+      convertPublicKey(bob.publicKey)
+    );
+    // noble: the same DH entirely inside the independent implementation
+    const noble = x25519.getSharedSecret(
+      ed25519.utils.toMontgomerySecret(seed(alice.secretKey)),
+      x25519.getPublicKey(ed25519.utils.toMontgomerySecret(seed(bob.secretKey)))
+    );
+    assert.deepEqual(Buffer.from(ours).toString("hex"), Buffer.from(noble).toString("hex"));
+  });
+
+  test("convertPublicKey rejects the small-order point (u = 0)", async () => {
+    const { ed25519 } = await import("@noble/curves/ed25519.js");
+    // y = 1 (little-endian 0x01) and y = -1 mod p are non-canonical Ed25519
+    // encodings of the small-order point whose Montgomery image is u = 0.
+    const yOne = new Uint8Array(32);
+    yOne[0] = 1;
+    const yMinusOne = Buffer.from(
+      "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+      "hex"
+    );
+    assert.throws(() => convertPublicKey(yOne), /small-order/);
+    assert.throws(() => convertPublicKey(yMinusOne), /small-order/);
+    // noble independently agrees these degenerate: y=-1 maps to all-zero u,
+    // y=1 refuses to decompress outright
+    assert.ok(
+      ed25519.utils.toMontgomery(yMinusOne).every((b: number) => b === 0)
+    );
+    assert.throws(() => ed25519.utils.toMontgomery(yOne));
+  });
+});
