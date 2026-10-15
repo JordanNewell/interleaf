@@ -148,7 +148,7 @@ mail from a new key.
   the invite as a QR — the full `obsidian://social-invite?code=…` deep link,
   rendered locally by a vendored encoder (ECC M; no network, nothing leaves
   the vault) — with **Copy QR image**, **Save QR to vault**
-  (`message-bus-invite-qr.png`), **Copy invite code / link**, and a
+  (`interleaf-invite-qr.png`), **Copy invite code / link**, and a
   **Copy reach-me text** button ("DM me on Interleaf — …" + the link).
   Scanning the QR with a phone camera opens Add contact in the recipient's
   Obsidian via the `social-invite` protocol handler, so a QR posted on a

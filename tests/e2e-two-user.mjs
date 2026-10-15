@@ -91,7 +91,7 @@ async function sendViaUI(page, to, body) {
     await page.keyboard.press("Enter");
   } catch {
     log(`palette flaked, using command API instead (to=${to})`);
-    await page.evaluate(() => app.commands.executeCommandById("message-bus:send"));
+    await page.evaluate(() => app.commands.executeCommandById("interleaf:send"));
   }
   await page.waitForSelector(".modal-container .messenger-body", { timeout: 8000 });
   await page.fill('.modal-container input[placeholder*="address"]', to);

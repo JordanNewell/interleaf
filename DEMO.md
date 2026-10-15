@@ -12,7 +12,7 @@ curtis-ai-chat-porter/demo/
 ```
 
 Identities live in each vault's
-`.obsidian/plugins/message-bus/data.json` (`address`: `bob` / `alice`,
+`.obsidian/plugins/interleaf/data.json` (`address`: `bob` / `alice`,
 poll every 3s, debug notices on). Plugin enablement is pre-seeded in each
 vault's `community-plugins.json`.
 

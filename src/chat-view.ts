@@ -488,7 +488,7 @@ export class MessengerChatView extends ItemView {
           encodeReceiptBlock(me, "read", next, unreadIds)
         )
         .catch((err) =>
-          console.error("[message-bus] read receipt failed", err)
+          console.error("[interleaf] read receipt failed", err)
         );
     }
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);

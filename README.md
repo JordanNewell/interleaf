@@ -36,7 +36,7 @@ the file explorer, search, quick switcher, or graph. The vault stays clean;
 users just chat.
 
 ```
-<vault>/.obsidian/plugins/message-bus/mailbox/
+<vault>/.obsidian/plugins/interleaf/mailbox/
 ├── registry.md               # who has an address (advisory)
 ├── curtis/inbox.md           # one inbox per address
 ├── owner/inbox.md            # yours
@@ -81,7 +81,7 @@ styles.css.
 ## Install into a vault
 
 Build, then copy `main.js`, `manifest.json`, and `styles.css` into
-`<vault>/.obsidian/plugins/message-bus/` and enable the plugin under
+`<vault>/.obsidian/plugins/interleaf/` and enable the plugin under
 Settings → Community plugins. BRAT works too.
 
 On first run a welcome modal asks who you are on this vault's bus: an

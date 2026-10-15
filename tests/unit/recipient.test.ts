@@ -23,7 +23,7 @@ test("display names and emails fail shape, inline — the old post-send bounce",
 });
 
 test("reserved names warn: nobody can ever register, so nobody reads", () => {
-  for (const name of ["support", "paypal.support", "message-bus"]) {
+  for (const name of ["support", "paypal.support", "interleaf", "message-bus"]) {
     const hint = recipientHint(name, { self: false, confirmed: false });
     assert.equal(hint.tone, "warn", name);
     assert.match(hint.text, /reserved/i);

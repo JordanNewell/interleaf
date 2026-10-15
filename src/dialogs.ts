@@ -1387,7 +1387,7 @@ export class AllAttachmentsModal extends Modal {
             await this.app.fileManager.trashFile(file);
             moved++;
           } catch (err) {
-            console.warn("[message-bus] attachment cleanup skipped", file.path, err);
+            console.warn("[interleaf] attachment cleanup skipped", file.path, err);
           }
         }
         new Notice(`Moved ${moved} file${moved === 1 ? "" : "s"} to trash`);

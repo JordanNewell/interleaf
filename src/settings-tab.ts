@@ -703,7 +703,7 @@ export class MessengerSettingTab extends PluginSettingTab {
           name: "Hide mail storage",
           desc:
             "Keep inboxes in a hidden app folder (" +
-            `${this.app.vault.configDir}/plugins/message-bus/mailbox` +
+            `${this.app.vault.configDir}/plugins/interleaf/mailbox` +
             ") so the vault stays clean — users just chat, and the markdown stays out of sight. " +
             "Turn off to store mail as normal vault notes in the folder below " +
             "(the visible folder is also what Obsidian Sync carries between devices; " +
@@ -713,7 +713,7 @@ export class MessengerSettingTab extends PluginSettingTab {
               .setName("Hide mail storage")
               .setDesc(
                 "Keep inboxes in a hidden app folder (" +
-                  `${this.app.vault.configDir}/plugins/message-bus/mailbox` +
+                  `${this.app.vault.configDir}/plugins/interleaf/mailbox` +
                   ") so the vault stays clean — users just chat, and the markdown stays out of sight. " +
                   "Turn off to store mail as normal vault notes in the folder below " +
                   "(the visible folder is also what Obsidian Sync carries between devices; " +

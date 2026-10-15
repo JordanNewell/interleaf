@@ -10,7 +10,7 @@ import { classifyInbound, parseContacts, suggestAddress } from "../../src/contac
 import { FakeAdapter } from "./fake-adapter";
 
 const ME = "owner";
-const SYSTEM = "message-bus";
+const SYSTEM = "interleaf";
 
 const store = (): { s: ContactsStore; adapter: FakeAdapter } => {
   const adapter = new FakeAdapter();

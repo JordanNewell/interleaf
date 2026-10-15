@@ -28,9 +28,10 @@ describe("om2 contact invites", () => {
 
   test("decodes both deep-link flavors and codes quoted inside text", () => {
     const code = encodeInvite(invite);
-    assert.deepEqual(decodeInvite(`obsidian://message-bus-invite?code=${code}`), decodeInvite(code));
-    // legacy Social links still decode — the code itself is what matters
+    assert.deepEqual(decodeInvite(`obsidian://interleaf-invite?code=${code}`), decodeInvite(code));
+    // legacy links still decode — the code itself is what matters
     assert.deepEqual(decodeInvite(`obsidian://social-invite?code=${code}`), decodeInvite(code));
+    assert.deepEqual(decodeInvite(`obsidian://message-bus-invite?code=${code}`), decodeInvite(code));
     assert.deepEqual(decodeInvite(`hey, add me: "${code}" — thanks`), decodeInvite(code));
   });
 

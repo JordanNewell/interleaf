@@ -36,7 +36,7 @@ const BOB = "demo-vault-2";
 
 /** Hidden storage root (the default): a dot-folder Obsidian never indexes. */
 const mailboxOf = (vault) =>
-  path.join(vault, ".obsidian", "plugins", "message-bus", "mailbox");
+  path.join(vault, ".obsidian", "plugins", "interleaf", "mailbox");
 
 const log = (...a) => console.log("[chat-view]", new Date().toISOString().slice(11, 19), ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -55,7 +55,7 @@ function installBuild() {
   // demo vaults' old visible Messenger/ fixture.
   fs.mkdirSync(SHARED_MAILBOX, { recursive: true });
   for (const vault of [D2, D3]) {
-    const pluginDir = path.join(vault, ".obsidian", "plugins", "message-bus");
+    const pluginDir = path.join(vault, ".obsidian", "plugins", "interleaf");
     fs.mkdirSync(pluginDir, { recursive: true });
     if (!fs.existsSync(path.join(pluginDir, "mailbox"))) {
       fs.symlinkSync(SHARED_MAILBOX, path.join(pluginDir, "mailbox"), "junction");
@@ -69,7 +69,7 @@ function installBuild() {
       data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
     } catch {}
     data.hiddenStorage = true;
-    data.lastRoot = ".obsidian/plugins/message-bus/mailbox";
+    data.lastRoot = ".obsidian/plugins/interleaf/mailbox";
     // the welcome modal would cover the window and swallow every click —
     // this harness tests the chat view, not onboarding
     data.onboarded = true;
@@ -153,7 +153,7 @@ async function waitForPluginLive(vault, timeoutMs = 45000) {
       await p.waitForFunction(
         () =>
           window.obsidianMessenger != null &&
-          app.commands.commands["message-bus:chat"] != null,
+          app.commands.commands["interleaf:chat"] != null,
         null,
         { timeout: 5000, polling: 300 }
       );
@@ -168,8 +168,8 @@ async function waitForPluginLive(vault, timeoutMs = 45000) {
 async function openChatView(page) {
   for (let i = 0; i < 10; i++) {
     const ok = await page.evaluate(() => {
-      if (!app.commands.commands["message-bus:chat"]) return false;
-      app.commands.executeCommandById("message-bus:chat");
+      if (!app.commands.commands["interleaf:chat"]) return false;
+      app.commands.executeCommandById("interleaf:chat");
       return true;
     });
     if (ok) {
@@ -189,7 +189,7 @@ async function openChatView(page) {
   const diag = await page
     .evaluate(() => ({
       leaves: app.workspace.getLeavesOfType("messenger-chat").length,
-      cmd: !!app.commands.commands["message-bus:chat"],
+      cmd: !!app.commands.commands["interleaf:chat"],
     }))
     .catch(() => ({}));
   throw new Error(`chat view never appeared ${JSON.stringify(diag)}`);
@@ -585,7 +585,7 @@ try {
         // alice first or the popout may be created by another vault's app
         await p.bringToFront();
         await p.evaluate(() =>
-          app.commands.executeCommandById("message-bus:chat-window")
+          app.commands.executeCommandById("interleaf:chat-window")
         );
         for (let j = 0; j < 8 && !popout; j++) {
           // don't filter by URL: under CDP, popout windows report about:blank
@@ -608,7 +608,7 @@ try {
           const addr = await popout
             .evaluate(
               () =>
-                app.plugins.plugins["message-bus"].settings.address
+                app.plugins.plugins["interleaf"].settings.address
             )
             .catch(() => "?");
           log(`popout is up (vault address: ${addr})`);
@@ -616,7 +616,7 @@ try {
         if (!popout) {
           const err = await p
             .evaluate(
-              () => app.plugins.plugins["message-bus"].lastPopoutError
+              () => app.plugins.plugins["interleaf"].lastPopoutError
             )
             .catch(() => null);
           log(`popout attempt ${i + 1} failed${err ? ` — ${err}` : " (no error recorded)"}`);

@@ -4,7 +4,7 @@ A minimal, vault-local message bus. Participants — Obsidian plugins, agents, s
 humans — get addresses and exchange messages by appending markdown blocks to each
 other's inbox notes. No network, no server, works anywhere the vault goes.
 
-The reference implementation is this repo's plugin (`message-bus`), but the
+The reference implementation is this repo's plugin (`interleaf`), but the
 protocol is deliberately simple enough that **anything that can append to a file can
 participate**: a shell one-liner, a Dataviewjs snippet, an editor on another device
 via Obsidian Sync / iCloud.
@@ -14,7 +14,7 @@ via Obsidian Sync / iCloud.
 Markdown files inside the vault.
 
 - Mailbox **root** is a configurable folder. The reference plugin defaults to a
-  hidden app folder, `<vault>/.obsidian/plugins/message-bus/mailbox/`,
+  hidden app folder, `<vault>/.obsidian/plugins/interleaf/mailbox/`,
   so the vault stays clean for chat-only users; turn off *Hide mail storage*
   to use a visible folder (default `Messenger/`) instead.
 - Obsidian never indexes dot-folders, and Obsidian Sync does not carry them.
@@ -30,7 +30,7 @@ Markdown files inside the vault.
 [a-zA-Z0-9][a-zA-Z0-9._-]{0,63}
 ```
 
-Convention: use your plugin id (`curtis`, `message-bus`) or a short slug for
+Convention: use your plugin id (`curtis`, `interleaf`) or a short slug for
 agents and humans (`owner`, `research-agent`). Addresses are **names, not
 authentication** — see §8.
 

@@ -42,7 +42,7 @@
  */
 
 /** The reference plugin's own bus address — it genuinely sends from this. */
-export const BUS_ADDRESS = "message-bus";
+export const BUS_ADDRESS = "interleaf";
 
 /**
  * Names no participant may register, grouped by the weight they'd borrow.
@@ -66,6 +66,7 @@ export const RESERVED_ADDRESSES: readonly string[] = [
   "helpdesk",
   "hostmaster",
   "inbox",
+  "interleaf",
   "mail",
   "messenger",
   "mod",

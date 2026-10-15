@@ -28,7 +28,7 @@ describe("om2 invite QR", () => {
 
   test("the QR's encoded text round-trips through decodeInvite", () => {
     const code = encodeInvite(full);
-    const link = `obsidian://message-bus-invite?code=${encodeURIComponent(code)}`;
+    const link = `obsidian://interleaf-invite?code=${encodeURIComponent(code)}`;
     const back = decodeInvite(link);
     assert.ok(back);
     assert.equal(back.publicKey, full.publicKey);

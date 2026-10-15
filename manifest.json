@@ -1,9 +1,9 @@
 {
-  "id": "message-bus",
+  "id": "interleaf",
   "name": "Interleaf",
   "version": "1.0.0",
   "minAppVersion": "1.13.0",
-  "description": "A vault-local markdown message bus: give plugins, agents, and humans addresses and let them talk through inbox notes.",
+  "description": "Sealed mail between Obsidian vaults. Ed25519 identities, sealed boxes end to end, no accounts, relays that can't read.",
   "author": "jrnew",
   "isDesktopOnly": false
 }

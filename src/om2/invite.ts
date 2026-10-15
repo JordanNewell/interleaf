@@ -10,13 +10,14 @@ import { fingerprint, fromB64u, toB64u } from "./crypto/keys";
  *
  * The code format (`osinv1-`) is shared with the Obsidian Social plugin, so a
  * code minted there pastes here and vice versa. This repo's own deep links
- * use the `message-bus-invite` action; pasted `social-invite` links still
- * decode, because the code itself is found in any text.
+ * use the `interleaf-invite` action; pasted `social-invite` links — and
+ * pre-rename `message-bus-invite` links already in the wild — still decode,
+ * because the code itself is found in any text.
  */
 
 export const INVITE_PREFIX = "osinv1-";
 /** Deep link that opens Obsidian and pre-fills Add contact (registered in main.ts). */
-export const INVITE_LINK_BASE = "obsidian://message-bus-invite?code=";
+export const INVITE_LINK_BASE = "obsidian://interleaf-invite?code=";
 
 export interface ContactInvite {
   /** base64url Ed25519 public key of the inviter */

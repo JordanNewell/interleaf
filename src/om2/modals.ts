@@ -132,7 +132,7 @@ export class IdentityModal extends Modal {
     try {
       drawInviteQr(canvas, inviteObj);
     } catch (err) {
-      console.error("[message-bus] qr render failed", err);
+      console.error("[interleaf] qr render failed", err);
       qrWrap.setText("(QR unavailable)");
     }
 
@@ -177,7 +177,7 @@ export class IdentityModal extends Modal {
       ]);
       new Notice("QR image copied");
     } catch (err) {
-      console.error("[message-bus] qr copy failed", err);
+      console.error("[interleaf] qr copy failed", err);
       new Notice("Couldn't copy the image here — use “Save QR to vault” instead");
     }
   }
@@ -187,7 +187,7 @@ export class IdentityModal extends Modal {
     if (!parsed) return;
     try {
       const png = await inviteQrPng(parsed);
-      const path = await uniqueVaultPath(this.plugin, "message-bus-invite-qr.png");
+      const path = await uniqueVaultPath(this.plugin, "interleaf-invite-qr.png");
       await this.plugin.app.vault.createBinary(path, png);
       new Notice(`Saved to the vault: ${path}`);
     } catch (err) {
