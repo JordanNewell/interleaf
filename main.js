@@ -13048,7 +13048,7 @@ var BridgeState = class _BridgeState {
 
 // src/om2/bridge.ts
 var BOUNCE_FROM = "bridge";
-var DEFAULT_REQUEST_NOTE = "Hi \u2014 I'd like to add you as a contact on Obsidian Messenger.";
+var DEFAULT_REQUEST_NOTE = "Hi \u2014 I'd like to add you as a contact on Interleaf.";
 var ACCEPT_REPLY_NOTE = "Contact request accepted \u2014 this conversation is now mutual.";
 var OUTGOING_TTL_MS = 14 * 24 * 60 * 60 * 1e3;
 var Bridge = class {
@@ -13806,7 +13806,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     );
     await this.store.upsertRegistry({
       address: BUS_ADDRESS,
-      name: "Message Bus (bus)",
+      name: "Interleaf (bus)",
       updated: (/* @__PURE__ */ new Date()).toISOString()
     });
     await this.store.upsertRegistry({
@@ -15318,7 +15318,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     const lines = [
       `# Conversation \u2014 ${nameOf(peer)} (${peer})`,
       "",
-      `Exported from Message Bus on ${(/* @__PURE__ */ new Date()).toLocaleString()}.`,
+      `Exported from Interleaf on ${(/* @__PURE__ */ new Date()).toLocaleString()}.`,
       ""
     ];
     let prevDay = "";

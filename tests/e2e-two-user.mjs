@@ -1,5 +1,5 @@
 /**
- * Two-user end-to-end test for Message Bus.
+ * Two-user end-to-end test for Interleaf.
  *
  * Obsidian ships with an Electron fuse that blocks --inspect, so Playwright's
  * _electron.launch cannot attach. Instead we:
@@ -85,7 +85,7 @@ async function sendViaUI(page, to, body) {
   try {
     await page.keyboard.press("Control+p");
     await page.waitForSelector(".prompt-input", { timeout: 5000 });
-    await page.keyboard.type("Message Bus: Send message");
+    await page.keyboard.type("Interleaf: Send message");
     await page.waitForSelector(".suggestion-item", { timeout: 5000 });
     await sleep(300);
     await page.keyboard.press("Enter");

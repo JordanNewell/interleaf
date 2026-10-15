@@ -1,5 +1,5 @@
 name: Bug report
-description: Report something broken in Message Bus
+description: Report something broken in Interleaf
 labels: [bug]
 body:
   - type: textarea

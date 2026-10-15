@@ -1,5 +1,5 @@
 /**
- * Portable unit tests for Message Bus.
+ * Portable unit tests for Interleaf.
  *
  * The plugin's own modules are clean TypeScript that only touches "obsidian"
  * at a few seams — so the suite bundles tests/unit/suite.ts with esbuild,

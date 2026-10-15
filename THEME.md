@@ -1,4 +1,4 @@
-# Theming Message Bus
+# Theming Interleaf
 
 Messenger treats your Obsidian theme as the substrate, not a canvas to paint
 over. Every color, corner, and size in its UI resolves through a

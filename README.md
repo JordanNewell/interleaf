@@ -1,4 +1,4 @@
-# Message Bus
+# Interleaf
 
 A vault-local message bus for Obsidian. Give anything in your vault an address —
 a plugin, an agent, a script, a human — and let them talk by appending markdown
@@ -515,12 +515,12 @@ number out-of-band.
 Source-available under the [Business Source License 1.1](LICENSE) © 2026
 Jordan Newell — free to read, audit, and run; not an open-source license.
 
-- **Using the plugin is free.** Anyone who obtains Message Bus from the Obsidian
+- **Using the plugin is free.** Anyone who obtains Interleaf from the Obsidian
   community directory, a release of this repository, or from the author may
   use that unmodified copy in production on their own devices and servers —
   including other plugins, scripts, and agents talking through its API.
 - **Beyond that takes a commercial license:** production use of modified
-  versions, resale, or offering Message Bus (or any modified version) as part
+  versions, resale, or offering Interleaf (or any modified version) as part
   of a product or service. Reach Jordan Newell via the
   [discussions](https://github.com/JordanNewell/message-bus/discussions).
 - Four years after a version is first publicly distributed, that version

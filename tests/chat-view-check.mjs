@@ -1,5 +1,5 @@
 /**
- * Chat-view end-to-end check for Message Bus.
+ * Chat-view end-to-end check for Interleaf.
  *
  * Same harness approach as e2e-two-user.mjs (CDP against real Obsidian — the
  * Electron fuse blocks Playwright's _electron.launch), focused on the

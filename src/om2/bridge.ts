@@ -165,7 +165,7 @@ interface DeliverOutcome {
 }
 
 const BOUNCE_FROM = "bridge";
-const DEFAULT_REQUEST_NOTE = "Hi — I'd like to add you as a contact on Obsidian Messenger.";
+const DEFAULT_REQUEST_NOTE = "Hi — I'd like to add you as a contact on Interleaf.";
 const ACCEPT_REPLY_NOTE = "Contact request accepted — this conversation is now mutual.";
 /**
  * A sent request authorizes auto-pin only while it is fresh (§2): the

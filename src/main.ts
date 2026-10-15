@@ -241,7 +241,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
     );
     await this.store.upsertRegistry({
       address: BUS_ADDRESS,
-      name: "Message Bus (bus)",
+      name: "Interleaf (bus)",
       updated: new Date().toISOString(),
     });
     await this.store.upsertRegistry({
@@ -2032,7 +2032,7 @@ export default class ObsidianMessengerPlugin extends Plugin {
     const lines: string[] = [
       `# Conversation — ${nameOf(peer)} (${peer})`,
       "",
-      `Exported from Message Bus on ${new Date().toLocaleString()}.`,
+      `Exported from Interleaf on ${new Date().toLocaleString()}.`,
       "",
     ];
     let prevDay = "";

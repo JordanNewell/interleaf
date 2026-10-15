@@ -23,7 +23,7 @@ vault's `community-plugins.json`.
 2. Open demo-vault-3 as a vault ("Open folder as vault"). On the trust
    prompt choose **Trust author and enable plugins** — that turns on the
    messenger. Alice is live.
-3. In either vault: command palette → **Message Bus: Send message**,
+3. In either vault: command palette → **Interleaf: Send message**,
    addressed to the other (`bob` or `alice`).
 4. Watch the other window: within ~3s a debug notice fires and the block
    appears in `Messenger/<to>/inbox.md`. Every vault polls every inbox, so

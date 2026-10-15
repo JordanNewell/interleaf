@@ -5,8 +5,8 @@ and OM-2 (the Obsidian Social plugin) · 2026-10-12
 
 **Update, later on 2026-10-12:** the OM-2 core (bridge, relay client, invite,
 quarantine) was ported from Obsidian Social into this repo — cross-vault mail
-is now built into Message Bus (`src/om2/`), with the first-contact handshake,
-the requests UI, and §9's return-address fix all shipped here. Message Bus
+is now built into Interleaf (`src/om2/`), with the first-contact handshake,
+the requests UI, and §9's return-address fix all shipped here. Interleaf
 verifies natively; Obsidian Social is now a separate project — pasted
 `social-invite` codes still decode here, and mail signed by its bridge still
 verifies via the badge fallback.
@@ -149,7 +149,7 @@ mail from a new key.
   rendered locally by a vendored encoder (ECC M; no network, nothing leaves
   the vault) — with **Copy QR image**, **Save QR to vault**
   (`message-bus-invite-qr.png`), **Copy invite code / link**, and a
-  **Copy reach-me text** button ("DM me on Message Bus — …" + the link).
+  **Copy reach-me text** button ("DM me on Interleaf — …" + the link).
   Scanning the QR with a phone camera opens Add contact in the recipient's
   Obsidian via the `social-invite` protocol handler, so a QR posted on a
   social network is a complete first-contact route with no directory and no
