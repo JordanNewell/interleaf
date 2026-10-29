@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@noble/curves": "^2.4.0",
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.6.5",
     "esbuild": "^0.25.0",
     "obsidian": "latest",
     "playwright-core": "^1.64.0",
