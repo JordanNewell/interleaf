@@ -229,9 +229,10 @@ test("gc quota applies even when retention is disabled (0 days)", async () => {
 test("gc collapses duplicate-id blocks (retransmitted mail) to the first", async () => {
   const a = new FakeAdapter();
   const s = store(a);
-  await s.append("curtis", msg("m1", "2026-10-10T00:00:00.000Z"));
+  const ts = new Date(Date.now() - 1 * DAY).toISOString();
+  await s.append("curtis", msg("m1", ts));
   // SPEC §14 retransmission re-appends the identical block — same id
-  await s.append("curtis", msg("m1", "2026-10-10T00:00:00.000Z"));
+  await s.append("curtis", msg("m1", ts));
   const dropped = await s.gc("curtis", 30 * DAY);
   assert.equal(dropped, 1);
   assert.deepEqual((await s.readInbox("curtis")).map((m) => m.id), ["m1"]);
