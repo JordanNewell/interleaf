@@ -1,4 +1,4 @@
-import { sha256 } from "@noble/hashes/sha256";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "./crypto/b64";
 import { ADDRESS_RE } from "../mailbox/envelope";
 
