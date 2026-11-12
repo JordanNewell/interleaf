@@ -11,7 +11,7 @@
  * Deliberately free of "obsidian" imports so the unit suite can run it.
  */
 
-import { argon2id } from "@noble/hashes/argon2";
+import { argon2id } from "@noble/hashes/argon2.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

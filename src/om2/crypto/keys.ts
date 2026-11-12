@@ -1,5 +1,5 @@
 import nacl from "tweetnacl";
-import { sha256 } from "@noble/hashes/sha256";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { base58Encode } from "./base58";
 import { bytesToHex, fromB64u, toB64u } from "./b64";
 
