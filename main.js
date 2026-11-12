@@ -11,7 +11,11 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -2625,7 +2629,7 @@ function pruneReceiptLines(content, cutoffMs) {
 }
 
 // src/reserved.ts
-var BUS_ADDRESS = "message-bus";
+var BUS_ADDRESS = "interleaf";
 var RESERVED_ADDRESSES = [
   // system & infrastructure — the bus, its files, and mail machinery
   "abuse",
@@ -2644,6 +2648,7 @@ var RESERVED_ADDRESSES = [
   "helpdesk",
   "hostmaster",
   "inbox",
+  "interleaf",
   "mail",
   "messenger",
   "mod",
@@ -5086,11 +5091,11 @@ function makeKeySalt() {
 async function deriveKekBytes(passcode, saltHex, kdf, iterations) {
   const secret = encoder.encode(passcode.trim());
   if (kdf === "argon2id") {
-    return argon2id(secret, hexToBytes(saltHex), {
+    return new Uint8Array(await argon2id(secret, hexToBytes(saltHex), {
       t: ARGON2ID_TIME,
       m: ARGON2ID_MEMORY_KIB,
       p: ARGON2ID_PARALLELISM
-    });
+    }));
   }
   const material = await subtle().importKey("raw", secret, "PBKDF2", false, [
     "deriveBits"
@@ -5175,7 +5180,11 @@ async function rewrapRawVaultKey(rawKey, newPasscode, iterations = PBKDF2_ITERAT
   const kek = await deriveKek(newPasscode, keySalt, kdf, iterations);
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const wrapped = new Uint8Array(
-    await subtle().encrypt({ name: "AES-GCM", iv }, kek, rawKey)
+    await subtle().encrypt(
+      { name: "AES-GCM", iv },
+      kek,
+      rawKey
+    )
   );
   const bundle = new Uint8Array(iv.length + wrapped.length);
   bundle.set(iv, 0);
@@ -6153,7 +6162,7 @@ function identityValid(identity) {
 
 // src/om2/invite.ts
 var INVITE_PREFIX = "osinv1-";
-var INVITE_LINK_BASE = "obsidian://message-bus-invite?code=";
+var INVITE_LINK_BASE = "obsidian://interleaf-invite?code=";
 function encodeInvite(invite) {
   const json = { v: 1, k: invite.publicKey, r: invite.relay };
   if (invite.handle) json.h = invite.handle;
@@ -7384,7 +7393,7 @@ var AllAttachmentsModal = class extends import_obsidian4.Modal {
             await this.app.fileManager.trashFile(file);
             moved++;
           } catch (err) {
-            console.warn("[message-bus] attachment cleanup skipped", file.path, err);
+            console.warn("[interleaf] attachment cleanup skipped", file.path, err);
           }
         }
         new import_obsidian4.Notice(`Moved ${moved} file${moved === 1 ? "" : "s"} to trash`);
@@ -8280,7 +8289,7 @@ var IdentityModal = class extends import_obsidian5.Modal {
     try {
       drawInviteQr(canvas, inviteObj);
     } catch (err) {
-      console.error("[message-bus] qr render failed", err);
+      console.error("[interleaf] qr render failed", err);
       qrWrap.setText("(QR unavailable)");
     }
     const codeArea = this.contentEl.createEl("textarea", { cls: "messenger-invite-code" });
@@ -8316,7 +8325,7 @@ var IdentityModal = class extends import_obsidian5.Modal {
       ]);
       new import_obsidian5.Notice("QR image copied");
     } catch (err) {
-      console.error("[message-bus] qr copy failed", err);
+      console.error("[interleaf] qr copy failed", err);
       new import_obsidian5.Notice("Couldn't copy the image here \u2014 use \u201CSave QR to vault\u201D instead");
     }
   }
@@ -8325,7 +8334,7 @@ var IdentityModal = class extends import_obsidian5.Modal {
     if (!parsed) return;
     try {
       const png = await inviteQrPng(parsed);
-      const path = await uniqueVaultPath(this.plugin, "message-bus-invite-qr.png");
+      const path = await uniqueVaultPath(this.plugin, "interleaf-invite-qr.png");
       await this.plugin.app.vault.createBinary(path, png);
       new import_obsidian5.Notice(`Saved to the vault: ${path}`);
     } catch (err) {
@@ -8898,10 +8907,10 @@ var MessengerSettingTab = class extends import_obsidian6.PluginSettingTab {
       items: [
         {
           name: "Hide mail storage",
-          desc: `Keep inboxes in a hidden app folder (${this.app.vault.configDir}/plugins/message-bus/mailbox) so the vault stays clean \u2014 users just chat, and the markdown stays out of sight. Turn off to store mail as normal vault notes in the folder below (the visible folder is also what Obsidian Sync carries between devices; iCloud/Dropbox/Syncthing-style folder sync works either way).`,
+          desc: `Keep inboxes in a hidden app folder (${this.app.vault.configDir}/plugins/interleaf/mailbox) so the vault stays clean \u2014 users just chat, and the markdown stays out of sight. Turn off to store mail as normal vault notes in the folder below (the visible folder is also what Obsidian Sync carries between devices; iCloud/Dropbox/Syncthing-style folder sync works either way).`,
           render: (setting) => {
             setting.setName("Hide mail storage").setDesc(
-              `Keep inboxes in a hidden app folder (${this.app.vault.configDir}/plugins/message-bus/mailbox) so the vault stays clean \u2014 users just chat, and the markdown stays out of sight. Turn off to store mail as normal vault notes in the folder below (the visible folder is also what Obsidian Sync carries between devices; iCloud/Dropbox/Syncthing-style folder sync works either way).`
+              `Keep inboxes in a hidden app folder (${this.app.vault.configDir}/plugins/interleaf/mailbox) so the vault stays clean \u2014 users just chat, and the markdown stays out of sight. Turn off to store mail as normal vault notes in the folder below (the visible folder is also what Obsidian Sync carries between devices; iCloud/Dropbox/Syncthing-style folder sync works either way).`
             ).addToggle(
               (toggle) => toggle.setValue(s.hiddenStorage).onChange(async (value) => {
                 toggle.setDisabled(true);
@@ -11139,7 +11148,7 @@ var MessengerChatView = class extends import_obsidian12.ItemView {
         me,
         encodeReceiptBlock(me, "read", next, unreadIds)
       ).catch(
-        (err) => console.error("[message-bus] read receipt failed", err)
+        (err) => console.error("[interleaf] read receipt failed", err)
       );
     }
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
@@ -12837,7 +12846,9 @@ function convertPublicKey(edPublicKey) {
   const num = (1n + y) % P2;
   const den = (1n - y + P2) % P2;
   const denInv = modPow(den, P2 - 2n, P2);
-  return bigIntToBytesLE(num * denInv % P2, 32);
+  const out = bigIntToBytesLE(num * denInv % P2, 32);
+  if (out.every((b) => b === 0)) throw new Error("ed2curve: small-order point (u = 0)");
+  return out;
 }
 
 // src/om2/crypto/seal.ts
@@ -13742,7 +13753,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     this.contacts = new ContactsStore(this.app.vault.adapter, root);
     this.bus = new MailBus(this.store, {
       onError: (err, address) => {
-        console.error(`[message-bus] handler error (${address})`, err);
+        console.error(`[interleaf] handler error (${address})`, err);
         if (this.settings.debug) {
           new import_obsidian14.Notice(`Messenger: handler error in ${address} \u2014 see console`);
         }
@@ -13816,6 +13827,9 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     });
     this.registerView(VIEW_TYPE_MESSENGER_CHAT, (leaf) => new MessengerChatView(leaf, this));
     this.om2Kv = adapterKv(this.app.vault.adapter, `${this.manifest.dir}/om2`);
+    this.registerObsidianProtocolHandler("interleaf-invite", (params) => {
+      void this.handleInviteCode(String(params.code ?? ""));
+    });
     this.registerObsidianProtocolHandler("message-bus-invite", (params) => {
       void this.handleInviteCode(String(params.code ?? ""));
     });
@@ -13994,7 +14008,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         );
       }
     } catch (err) {
-      console.error("[message-bus] pump failed", err);
+      console.error("[interleaf] pump failed", err);
     }
   }
   async persistCursors() {
@@ -14015,7 +14029,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         await this.store.adoptConflicts(address);
       }
     } catch (err) {
-      console.error("[message-bus] conflict adoption failed", err);
+      console.error("[interleaf] conflict adoption failed", err);
     }
   }
   rememberId(id) {
@@ -14053,7 +14067,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
             void this.updateBadge();
           }
         } catch (err) {
-          console.error("[message-bus] burn sweep failed", err);
+          console.error("[interleaf] burn sweep failed", err);
           break;
         }
       } while (this.burnSweepQueued);
@@ -14108,7 +14122,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
           receipts = parseReceipts(await this.store.readReceiptsRaw(entry.message.to));
         }
       } catch (err) {
-        console.error("[message-bus] receipt check failed", err);
+        console.error("[interleaf] receipt check failed", err);
         continue;
       }
       switch (planRetransmit(entry, hasReceiptsFile, receipts, now)) {
@@ -14123,7 +14137,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
           try {
             await this.store.append(entry.message.to, entry.message);
           } catch (err) {
-            console.error("[message-bus] retransmit failed", err);
+            console.error("[interleaf] retransmit failed", err);
             continue;
           }
           entry.attempts += 1;
@@ -14207,7 +14221,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     } catch (err) {
       this.lastPopoutError = String(err?.message ?? err);
       console.warn(
-        "[message-bus] popout failed, opening in-app:",
+        "[interleaf] popout failed, opening in-app:",
         this.lastPopoutError
       );
       return this.openChat(peer);
@@ -14295,7 +14309,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         )
       );
     } catch (err) {
-      console.error("[message-bus] delivery receipt failed", err);
+      console.error("[interleaf] delivery receipt failed", err);
       for (const id of ids) this.pendingDelivered.add(id);
       if (this.receiptTimer === null) {
         this.receiptTimer = window.setTimeout(() => {
@@ -14510,7 +14524,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
       try {
         await this.om2Bridge.accept(entry.fp);
       } catch (err) {
-        console.error("[message-bus] om2 accept failed", err);
+        console.error("[interleaf] om2 accept failed", err);
         new import_obsidian14.Notice(`Messenger: accept failed \u2014 ${err instanceof Error ? err.message : "unknown error"}`);
         return;
       }
@@ -14529,7 +14543,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
       try {
         await this.om2Bridge.decline(entry.fp);
       } catch (err) {
-        console.error("[message-bus] om2 decline failed", err);
+        console.error("[interleaf] om2 decline failed", err);
       }
     }
     if (entry) await this.contacts.setState(address, "blocked");
@@ -14728,7 +14742,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         this.settings.passcodeHash = "";
         this.settings.passcodeSalt = "";
       } catch (err) {
-        console.error("[message-bus] key re-wrap failed", err);
+        console.error("[interleaf] key re-wrap failed", err);
         return false;
       }
       await this.saveSettings();
@@ -14750,7 +14764,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
           kdf: DEFAULT_KDF
         });
       } catch (err) {
-        console.error("[message-bus] om2 identity re-wrap failed", err);
+        console.error("[interleaf] om2 identity re-wrap failed", err);
       }
     }
     await this.saveSettings();
@@ -14911,6 +14925,25 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         this.settings.passcodeSalt = "";
         await this.saveSettings();
       }
+      if (this.settings.kdf === LEGACY_KDF) {
+        try {
+          const raw = await unwrapRawVaultKey(
+            this.unlockSecret(candidate),
+            this.settings.keySalt,
+            this.settings.wrappedKey,
+            this.settings.kdfIterations,
+            LEGACY_KDF
+          );
+          const bundle = await rewrapRawVaultKey(raw, this.unlockSecret(candidate));
+          this.settings.keySalt = bundle.keySalt;
+          this.settings.wrappedKey = bundle.wrappedKey;
+          this.settings.kdfIterations = PBKDF2_ITERATIONS;
+          this.settings.kdf = DEFAULT_KDF;
+          await this.saveSettings();
+        } catch (err) {
+          console.error("[interleaf] silent KDF re-wrap failed", err);
+        }
+      }
     } else if (!this.verifyPasscodeHash(candidate)) {
       return false;
     }
@@ -14918,7 +14951,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     try {
       await this.unlockOm2(candidate);
     } catch (err) {
-      console.error("[message-bus] om2 identity unlock failed", err);
+      console.error("[interleaf] om2 identity unlock failed", err);
     }
     this.refreshChatViews();
     return true;
@@ -14987,7 +15020,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
       contacts: this.om2Book,
       relayUrl: this.settings.om2.relayUrl,
       log: (msg) => {
-        if (this.settings.debug) console.info(`[message-bus/om2] ${msg}`);
+        if (this.settings.debug) console.info(`[interleaf/om2] ${msg}`);
       },
       onEvent: (ev) => this.onOm2Event(ev)
     });
@@ -15003,7 +15036,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
     try {
       this.om2Identity = await openIdentityRecord(record, secret);
     } catch (err) {
-      console.error("[message-bus] om2 identity unwrapping failed", err);
+      console.error("[interleaf] om2 identity unwrapping failed", err);
       new import_obsidian14.Notice("Messenger: the cross-vault identity is unreadable \u2014 regenerate it in settings", 1e4);
       return;
     }
@@ -15013,7 +15046,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
   async stopOm2() {
     const bridge = this.om2Bridge;
     this.om2Bridge = null;
-    if (bridge) await bridge.stop().catch((err) => console.error("[message-bus] om2 stop failed", err));
+    if (bridge) await bridge.stop().catch((err) => console.error("[interleaf] om2 stop failed", err));
     wipeIdentity(this.om2Identity);
     this.om2Identity = null;
   }
@@ -15152,7 +15185,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
         await this.createOm2Identity(passcode);
         new import_obsidian14.Notice("Messenger: cross-vault mail is on \u2014 your invite lives in settings", 8e3);
       } catch (err) {
-        console.error("[message-bus] om2 onboarding setup failed", err);
+        console.error("[interleaf] om2 onboarding setup failed", err);
         new import_obsidian14.Notice("Messenger: cross-vault mail setup failed \u2014 enable it later in settings");
         this.settings.om2.enabled = false;
       }
@@ -15186,7 +15219,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
       paragraphs.push("Try *Send message* from the command palette, or just type below.");
       await this.bus.send(BUS_ADDRESS, address, paragraphs.join("\n"));
     } catch (err) {
-      console.warn("[message-bus] welcome message failed", err);
+      console.warn("[interleaf] welcome message failed", err);
     }
     await this.openChat(BUS_ADDRESS);
   }
@@ -15272,7 +15305,7 @@ var ObsidianMessengerPlugin = class extends import_obsidian14.Plugin {
           encodeReceiptBlock(me, "read", next, unreadIds)
         );
       } catch (err) {
-        console.error("[message-bus] read receipt failed", err);
+        console.error("[interleaf] read receipt failed", err);
       }
     }
     await this.saveSettings();

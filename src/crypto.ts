@@ -72,7 +72,7 @@ export function toB64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export function fromB64(b64: string): Uint8Array {
+export function fromB64(b64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -88,7 +88,7 @@ const randomHex = (nBytes: number): string => {
   return out;
 };
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
@@ -122,14 +122,14 @@ async function deriveKekBytes(
   saltHex: string,
   kdf: KdfId,
   iterations: number
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const secret = encoder.encode(passcode.trim());
   if (kdf === "argon2id") {
-    return argon2id(secret, hexToBytes(saltHex), {
+    return new Uint8Array(await argon2id(secret, hexToBytes(saltHex), {
       t: ARGON2ID_TIME,
       m: ARGON2ID_MEMORY_KIB,
       p: ARGON2ID_PARALLELISM,
-    });
+    }));
   }
   const material = await subtle().importKey("raw", secret, "PBKDF2", false, [
     "deriveBits",
@@ -172,7 +172,9 @@ export interface VaultCipher {
  * key exists inside the API from here on) — the raw bytes have no further
  * business being readable.
  */
-async function cipherFromRawKey(raw: Uint8Array): Promise<VaultCipher> {
+async function cipherFromRawKey(
+  raw: Uint8Array<ArrayBuffer>
+): Promise<VaultCipher> {
   const key = await subtle().importKey(
     "raw",
     raw,
@@ -268,7 +270,11 @@ export async function rewrapRawVaultKey(
   const kek = await deriveKek(newPasscode, keySalt, kdf, iterations);
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const wrapped = new Uint8Array(
-    await subtle().encrypt({ name: "AES-GCM", iv }, kek, rawKey)
+    await subtle().encrypt(
+      { name: "AES-GCM", iv },
+      kek,
+      rawKey as Uint8Array<ArrayBuffer>
+    )
   );
   const bundle = new Uint8Array(iv.length + wrapped.length);
   bundle.set(iv, 0);
